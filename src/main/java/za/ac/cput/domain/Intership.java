@@ -1,7 +1,14 @@
-package ac.za.cput;
+package za.ac.cput.domain;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+/*
+Internshsip.java
+Internship entity class
+Author: Refilwe Mabena(231013051)
+Date: 10 March 2026
+*/
+    
 
 public class Intership {
     private String intershipId;
@@ -99,3 +106,4 @@ public class Intership {
         }
     }
 }
+
