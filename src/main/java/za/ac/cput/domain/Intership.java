@@ -1,0 +1,101 @@
+package ac.za.cput;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+public class Intership {
+    private String intershipId;
+    private String title;
+    private String description;
+    private String location;
+    private LocalDateTime deadline;
+
+    private Intership(Builder buider) {
+        this.intershipId = builder.internshipId;
+        this.title = builder.title;
+        this.description = builder.description;
+        this.location = builder.location;
+        this.deadline = builder.deadline;
+    }
+
+    //Getter
+
+    public String getIntershipId() {
+        return intershipId;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public LocalDateTime getDeadline() {
+        return deadline;
+    }
+
+    //toString
+    @Override
+    public String toString() {
+        return "Intership{" +
+                "intershipId='" + intershipId + '\'' +
+                ", title='" + title + '\'' +
+                ", description='" + description + '\'' +
+                ", location='" + location + '\'' +
+                ", deadline='" + deadline + '\'' +
+                '}';
+    }
+
+    //equals
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Intership intership)) return false;
+        return Objects.equals(intershipId, intership.intershipId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(intershipId);
+    }
+
+    //Builder pattern
+    Public static class Builder{
+        private String intershipId;
+        private String title;
+        private String description;
+        private String location;
+        private LocalDateTime deadline;
+
+        public Builder setIntershipId(String intershipId) {
+            this.intershipId = intershipId;
+            return this;
+        }
+
+        public Builder setTitle(String title) {
+            this.title = title;
+            return this;
+        }
+
+        public Builder setDescription(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public Builder setLocation(String location) {
+            this.location = location;
+            return this;
+        }
+
+        public Builder setDeadline(LocalDateTime deadline) {
+            this.deadline = deadline;
+            return this;
+        }
+    }
+}
