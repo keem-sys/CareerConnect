@@ -15,7 +15,11 @@ import java.util.*;
 public class ApplicationRepository implements IApplicationRepository {
 
     private static ApplicationRepository repository = null;
-    private final Map<String, Application> applicationMap = new HashMap<>();
+    private final Map<String, Application> applicationMap;
+
+    private ApplicationRepository() {
+        applicationMap = new HashMap<>();
+    }
 
     public static ApplicationRepository getRepository() {
         if (repository == null) {
