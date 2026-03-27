@@ -8,11 +8,5 @@ import java.util.Set;
  * Author: Sylvia Mahlangu(222954396)
  * Date: 24 March 2026
  */
-public interface ICompanyRepository {
-
-    Company create(Company company);
-    Company read(String companyId);
-    Company update(Company company);
-    boolean delete(String companyId);
-    Set<Company> getAll();
+public interface ICompanyRepository extends IRepository<Company, String> {
 }

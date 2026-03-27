@@ -4,13 +4,13 @@ import za.ac.cput.domain.Company;
 import za.ac.cput.factory.CompanyFactory;
 import org.junit.jupiter.api.*;
 
-import java.util.Set;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /*
  * CompanyRepositoryTest.java
- * Test class for ConmpanyRepository
+ * Test class for CompanyRepository
  * Author: Sylvia Mahlangu (222954396)
  * Date: 24 March 2026
  */
@@ -18,8 +18,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CompanyRepositoryTest {
 
-    private static CompanyRepository repository = CompanyRepository.getRepository();
-    private static Company company = CompanyFactory.createCompany(
+    private static final CompanyRepository repository = CompanyRepository.getRepository();
+
+    private static final Company company = CompanyFactory.createCompany(
             "C001", "CareerConnect", "Technology", "222954396@mycput.ac.za"
     );
 
@@ -29,6 +30,7 @@ class CompanyRepositoryTest {
         Company created = repository.create(company);
         assertNotNull(created);
         assertEquals(company.getCompanyId(), created.getCompanyId());
+        System.out.println("Created: " + created);
     }
 
     @Test
@@ -36,6 +38,7 @@ class CompanyRepositoryTest {
     void read() {
         Company read = repository.read(company.getCompanyId());
         assertNotNull(read);
+        System.out.println("Read: " + read);
     }
 
     @Test
@@ -43,19 +46,21 @@ class CompanyRepositoryTest {
     void update() {
         Company updatedCompany = new Company.Builder()
                 .copy(company)
-                .setName("CareerConnect")
+                .setName("CareerConnect Global")
                 .build();
 
         Company updated = repository.update(updatedCompany);
         assertNotNull(updated);
-        assertEquals("CareerConnect", updated.getName());
+        assertEquals("CareerConnect Global", updated.getName());
+        System.out.println("Updated: " + updated);
     }
 
     @Test
     @Order(4)
     void getAll() {
-        Set<Company> companies = repository.getAll();
+        List<Company> companies = repository.getAll();
         assertFalse(companies.isEmpty());
+        System.out.println("All Companies: " + companies);
     }
 
     @Test
@@ -63,5 +68,7 @@ class CompanyRepositoryTest {
     void delete() {
         boolean success = repository.delete(company.getCompanyId());
         assertTrue(success);
+        assertNull(repository.read(company.getCompanyId()));
+        System.out.println("Deleted successfully");
     }
 }
