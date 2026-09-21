@@ -1,4 +1,3 @@
-
 import apiClient from './apiClient';
 
 const internshipService = {

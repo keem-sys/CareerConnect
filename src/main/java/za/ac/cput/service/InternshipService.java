@@ -10,6 +10,7 @@ Date: 6 August 2026
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import za.ac.cput.domain.Internship;
+import za.ac.cput.factory.InternshipFactory;
 import za.ac.cput.repository.InternshipRepository;
 
 import java.time.LocalDateTime;
@@ -25,8 +26,22 @@ public class InternshipService implements IInternshipService {
         this.internshipRepository = internshipRepository;
     }
 
+
     @Override
     public Internship create(Internship internship) {
+       // Run Factory Validation (Safely checks for null/empty title, description, location, deadline)
+        Internship validatedInternship = InternshipFactory.createInternship(
+                internship.getInternshipId(),
+                internship.getTitle(),
+                internship.getDescription(),
+                internship.getLocation(),
+                internship.getDeadline()
+        );
+
+        if (validatedInternship == null) {
+            System.err.println("Posting internship failed: Missing or invalid fields caught by InternshipFactory.");
+            return null;
+        }
 
         // Business rule:
         // The internship deadline must be in the future.
@@ -35,6 +50,7 @@ public class InternshipService implements IInternshipService {
             return null;
         }
 
+        // Prevent Duplicate IDs
         if (internshipRepository.existsById(internship.getInternshipId())) {
             System.out.println("Posting Failed: Internship ID already exists.");
             return null;

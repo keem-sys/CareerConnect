@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     // Read initial user state from localStorage
@@ -9,13 +9,13 @@ export const AuthProvider = ({ children }) => {
         return storedUser ? JSON.parse(storedUser) : null;
     });
 
-    // Login function: updates state AND localStorage
+    // Login function: updates state and localStorage
     const login = (userData) => {
         localStorage.setItem('currentUser', JSON.stringify(userData));
         setUser(userData);
     };
 
-    // Logout function: clears state AND localStorage
+    // Logout function: clears state and localStorage
     const logout = () => {
         localStorage.removeItem('currentUser');
         setUser(null);
@@ -28,5 +28,5 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-// Custom hook to access auth state anywhere in your app
+// Custom hook to access auth state anywhere
 export const useAuth = () => useContext(AuthContext);

@@ -6,6 +6,8 @@ import HomePage from './pages/HomePage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import SignupPage from './pages/SignupPage';
 import LoginPage from './pages/LoginPage';
+import InternshipPage from "./pages/InternshipPage.jsx";
+import PostInternshipPage from "./pages/PostInternshipPage.jsx";
 
 export default function App() {
     return (
@@ -19,6 +21,8 @@ export default function App() {
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/signup" element={<SignupPage />} />
                             <Route path="/login" element={<LoginPage />} />
+                            <Route path="/internships" element={<InternshipPage />} />
+                            <Route path="/internships/new" element={<PostInternshipPage />} />
                         </Routes>
                     </main>
                 </div>
