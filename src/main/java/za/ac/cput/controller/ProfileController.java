@@ -11,7 +11,7 @@ import java.util.Optional;
  * ProfileController.java
  * Profile REST controller
  * Author: Oratilwe Komane (230716873)
- * Date: 11 March 2026
+ * Date: 11 September 2026
  */
 @RestController
 @RequestMapping("/api/profile")

@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import za.ac.cput.domain.Profile;
 import za.ac.cput.factory.ProfileFactory;
-import za.ac.cput.repository.IProfileRepository;
+import za.ac.cput.repository.ProfileRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,14 +13,14 @@ import java.util.Optional;
  * ProfileService.java
  * ProfileService implementation class
  * Author: Oratilwe Komane (230716873)
- * Date: 11 March 2026
+ * Date: 11 September 2026
  */
 @Service
 public class ProfileService implements IProfileService {
-    private final IProfileRepository profileRepository;
+    private final ProfileRepository profileRepository;
 
     @Autowired
-    public ProfileService(IProfileRepository profileRepository) {
+    public ProfileService(ProfileRepository profileRepository) {
         this.profileRepository = profileRepository;
     }
 

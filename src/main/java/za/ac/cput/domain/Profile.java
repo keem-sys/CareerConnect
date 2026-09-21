@@ -1,8 +1,7 @@
 package za.ac.cput.domain;
 
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -10,7 +9,7 @@ import java.util.Objects;
  * Profile.java
  * Profile entity class
  * Author: Oratilwe Komane (230716873)
- * Date: 11 March 2026
+ * Date: 09 September 2026
  */
 @Entity
 public class Profile {
@@ -21,6 +20,11 @@ public class Profile {
     private String bio;
 
     @ElementCollection
+    @CollectionTable(
+            name = "profile_skills",
+            joinColumns = @JoinColumn(name = "profile_id")
+    )
+    @Column(name = "skill")
     private List<String> skills;
 
     private String resumeLink;
