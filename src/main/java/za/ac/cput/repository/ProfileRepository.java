@@ -10,9 +10,9 @@ import java.util.Optional;
  * IProfileRepository.java
  * IProfileRepository interface
  * Author: Oratilwe Komane (230716873)
- * Date: 11 March 2026
+ * Date: 11 September 2026
  */
 @Repository
-public interface IProfileRepository extends JpaRepository<Profile, String> {
+public interface ProfileRepository extends JpaRepository<Profile, String> {
     Optional<Profile> findByStudentNumber(String studentNumber);
 }

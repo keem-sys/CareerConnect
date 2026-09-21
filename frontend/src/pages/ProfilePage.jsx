@@ -11,13 +11,12 @@ export default function ProfilePage() {
     const [skills, setSkills] = useState([]);
     const [skillInput, setSkillInput] = useState('');
     const [resumeLink, setResumeLink] = useState('');
-    const [linkedinUrl, setLinkedinUrl] = useState('');
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
 
-    // On page load, check if this student already has a saved profile.
+    // On page load, check if this student already has a saved profile in MySQL.
     useEffect(() => {
         const loadExistingProfile = async () => {
             if (!user?.studentNumber) {
@@ -33,7 +32,7 @@ export default function ProfilePage() {
                     setResumeLink(existing.resumeLink || '');
                 }
             } catch (err) {
-                // No existing profile for this student yet - that's fine, show a blank form.
+                // No existing profile for this student yet - show blank form.
             } finally {
                 setLoading(false);
             }
@@ -66,7 +65,7 @@ export default function ProfilePage() {
         setMessage(null);
 
         if (!bio.trim() || skills.length === 0 || !resumeLink.trim()) {
-            setMessage({ type: 'error', text: 'Bio, at least one skill, and a resume link are required.' });
+            setMessage({ type: 'error', text: 'Bio, at least one skill, and a resume/CV link are required.' });
             return;
         }
 
@@ -106,12 +105,13 @@ export default function ProfilePage() {
 
     return (
         <div className="max-w-4xl mx-auto px-4 py-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* LEFT COLUMN: Profile Form */}
             <div className="bg-card-bg border border-ui-border rounded-2xl shadow-sm p-6">
                 <h1 className="font-heading text-2xl font-bold text-text-main mb-1">
                     {profileId ? 'Edit Your Profile' : 'Build Your Profile'}
                 </h1>
                 <p className="text-text-muted text-sm mb-6">
-                    Add your bio, skills, and links so companies can find you.
+                    Add your bio, skills, and CV link so tech employers can discover you.
                 </p>
 
                 <form onSubmit={handleSave} className="space-y-5">
@@ -123,7 +123,7 @@ export default function ProfilePage() {
                             value={bio}
                             onChange={(e) => setBio(e.target.value)}
                             rows={4}
-                            placeholder="Tell companies a bit about yourself..."
+                            placeholder="Tell companies a bit about your academic background and interests..."
                             className="w-full rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent"
                         />
                     </div>
@@ -138,13 +138,13 @@ export default function ProfilePage() {
                                 value={skillInput}
                                 onChange={(e) => setSkillInput(e.target.value)}
                                 onKeyDown={handleSkillKeyDown}
-                                placeholder="e.g. Java, Spring Boot, React"
+                                placeholder="e.g. Java, Spring Boot, React (Press Enter)"
                                 className="flex-1 rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent"
                             />
                             <button
                                 type="button"
                                 onClick={addSkill}
-                                className="flex items-center justify-center rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white px-3 transition-colors"
+                                className="flex items-center justify-center rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white px-3 transition-colors cursor-pointer"
                             >
                                 <Plus size={18} />
                             </button>
@@ -161,7 +161,7 @@ export default function ProfilePage() {
                                         <button
                                             type="button"
                                             onClick={() => removeSkill(skill)}
-                                            className="hover:text-rose-600"
+                                            className="hover:text-rose-600 cursor-pointer"
                                         >
                                             <X size={14} />
                                         </button>
@@ -173,27 +173,14 @@ export default function ProfilePage() {
 
                     <div>
                         <label className="block text-sm font-medium text-text-main mb-1">
-                            CV / Resume Link
+                            CV / Resume Document Link
                         </label>
                         <input
                             type="url"
                             value={resumeLink}
                             onChange={(e) => setResumeLink(e.target.value)}
-                            placeholder="https://example.com/resume.pdf"
-                            className="w-full rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-text-main mb-1">
-                            LinkedIn Profile URL
-                        </label>
-                        <input
-                            type="url"
-                            value={linkedinUrl}
-                            onChange={(e) => setLinkedinUrl(e.target.value)}
-                            placeholder="https://linkedin.com/in/yourname"
-                            className="w-full rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent"
+                            placeholder="https://drive.google.com/... or link to your PDF"
+                            className="w-full rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent font-mono text-xs"
                         />
                     </div>
 
@@ -212,38 +199,39 @@ export default function ProfilePage() {
                     <button
                         type="submit"
                         disabled={saving}
-                        className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white font-medium rounded-xl py-2.5 transition-colors disabled:opacity-60"
+                        className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white font-medium rounded-xl py-2.5 transition-colors disabled:opacity-60 cursor-pointer shadow-sm"
                     >
                         {saving ? 'Saving...' : profileId ? 'Update Profile' : 'Save Profile'}
                     </button>
                 </form>
             </div>
 
+            {/* RIGHT COLUMN: Live Preview Card */}
             <div className="bg-card-bg border border-ui-border rounded-2xl shadow-sm p-6 h-fit">
                 <h2 className="font-heading text-lg font-bold text-text-main mb-4">
-                    Preview
+                    Student Profile Preview
                 </h2>
 
                 <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-brand-primary flex items-center justify-center text-white">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-primary flex items-center justify-center text-white font-bold text-base shadow-sm">
                         <User size={22} />
                     </div>
                     <div>
                         <p className="font-heading font-semibold text-text-main">
                             {user?.name || 'Student Name'}
                         </p>
-                        <p className="text-text-subtle text-sm font-mono">
+                        <p className="text-text-subtle text-xs font-mono">
                             {user?.studentNumber || 'Student Number'}
                         </p>
                     </div>
                 </div>
 
-                <p className="text-text-main text-sm mb-4">
-                    {bio || <span className="text-text-subtle">Your bio will appear here.</span>}
+                <p className="text-text-main text-sm mb-4 leading-relaxed">
+                    {bio || <span className="text-text-subtle italic">Your bio summary will appear here once typed.</span>}
                 </p>
 
                 {skills.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-wrap gap-2 mb-6">
                         {skills.map((skill) => (
                             <span
                                 key={skill}
@@ -255,26 +243,18 @@ export default function ProfilePage() {
                     </div>
                 )}
 
-                <div className="space-y-2 text-sm">
-                    {resumeLink && (
+                <div className="pt-4 border-t border-ui-border">
+                    {resumeLink ? (
                         <a
                             href={resumeLink}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex items-center gap-2 text-brand-accent hover:underline"
+                            className="inline-flex items-center gap-2 text-brand-accent hover:underline text-xs font-semibold"
                         >
-                            <LinkIcon size={16} /> Resume / CV
+                            <LinkIcon size={14} /> View Student Resume / CV
                         </a>
-                    )}
-                    {linkedinUrl && (
-                        <a
-                            href={linkedinUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 text-brand-accent hover:underline"
-                        >
-                            <LinkIcon size={16} /> LinkedIn Profile
-                        </a>
+                    ) : (
+                        <span className="text-text-subtle text-xs italic">No resume linked yet</span>
                     )}
                 </div>
             </div>

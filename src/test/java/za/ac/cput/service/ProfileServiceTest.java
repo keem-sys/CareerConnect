@@ -8,7 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import za.ac.cput.domain.Profile;
 import za.ac.cput.factory.ProfileFactory;
-import za.ac.cput.repository.IProfileRepository;
+import za.ac.cput.repository.ProfileRepository;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class ProfileServiceTest {
     @Mock
-    private IProfileRepository profileRepository;
+    private ProfileRepository profileRepository;
     private Profile profile;
 
     @InjectMocks

@@ -1,14 +1,7 @@
 import { useState } from 'react';
 import internshipService from '../services/internshipService';
-import {useAuth} from "../context/AuthContext.jsx";
-import {Navigate} from "react-router-dom";
 
 function PostInternshipPage() {
-
-    const {user } = useAuth();
-    if (!user || user.role === 'STUDENT') {
-        return <Navigate to="/internships" replace />;
-    }
 
     const [formData, setFormData] = useState({
         title: '',
