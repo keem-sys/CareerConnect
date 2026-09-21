@@ -11,9 +11,10 @@ import java.util.UUID;
  * Date: 11 March 2026
  */
 public class ProfileFactory {
-    public static Profile buildProfile(String bio, List<String> skills, String resumeLink) {
+    public static Profile buildProfile(String studentNumber, String bio, List<String> skills, String resumeLink) {
 
-        if (bio == null || bio.isEmpty() ||
+        if (studentNumber == null || studentNumber.isEmpty() ||
+                bio == null || bio.isEmpty() ||
                 skills == null || skills.isEmpty() ||
                 resumeLink == null || resumeLink.isEmpty()) {
             return null;
@@ -23,6 +24,7 @@ public class ProfileFactory {
 
         return new Profile.Builder()
                 .setProfileId(profileId)
+                .setStudentNumber(studentNumber)
                 .setBio(bio)
                 .setSkills(skills)
                 .setResumeLink(resumeLink)
