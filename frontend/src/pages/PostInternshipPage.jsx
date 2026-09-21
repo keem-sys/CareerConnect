@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import internshipService from '../services/internshipService';
+import {useAuth} from "../context/AuthContext.jsx";
+import {Navigate} from "react-router-dom";
 
 function PostInternshipPage() {
+
+    const {user } = useAuth();
+    if (!user || user.role === 'STUDENT') {
+        return <Navigate to="/internships" replace />;
+    }
+
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -35,9 +43,10 @@ function PostInternshipPage() {
             setMessageType('error');
             return;
         }
-
+        const generatedId = `INT-${Date.now().toString().slice(-6)}`;
         try {
             await internshipService.createInternship({
+                internshipId: generatedId,
                 title: formData.title,
                 description: formData.description,
                 location: formData.location,

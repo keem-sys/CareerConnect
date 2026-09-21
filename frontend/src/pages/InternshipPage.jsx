@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import internshipService from '../services/internshipService';
 
-function BrowseInternshipsPage() {
+function InternshipPage() {
     const [internships, setInternships] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('grid');
@@ -120,31 +120,46 @@ function BrowseInternshipsPage() {
                         {filteredInternships.map((internship) => (
                             <div
                                 key={internship.internshipId || internship.id}
-                                className="rounded-xl border border-ui-border bg-white p-6 shadow-sm"
+                                className="rounded-xl border border-ui-border bg-white p-6 shadow-sm flex flex-col justify-between"
                             >
-                                <h2 className="mb-2 text-xl font-bold text-text-main">
-                                    {internship.title}
-                                </h2>
-
-                                <p className="mb-3 text-text-main">
-                                    {internship.description}
-                                </p>
-
-                                <div className="mb-2">
-                                    <span className="font-semibold text-text-main">
-                                        Location:
-                                    </span>{' '}
-                                    {internship.location}
-                                </div>
-
                                 <div>
-                                    <span className="font-semibold text-text-main">
-                                        Deadline:
-                                    </span>{' '}
-                                    {internship.deadline
-                                        ? new Date(internship.deadline).toLocaleString()
-                                        : 'Not specified'}
+                                    <h2 className="mb-2 text-xl font-bold text-text-main">
+                                        {internship.title}
+                                    </h2>
+
+                                    <p className="mb-3 text-text-muted text-sm">
+                                        {internship.description}
+                                    </p>
+
+                                    <div className="mb-2 text-xs">
+                                        <span className="font-semibold text-text-main">
+                                            Location:
+                                        </span>{' '}
+                                        {internship.location}
+                                    </div>
+
+                                    <div className="text-xs">
+                                        <span className="font-semibold text-text-main">
+                                            Deadline:
+                                        </span>{' '}
+                                        {internship.deadline
+                                            ? new Date(internship.deadline).toLocaleDateString()
+                                            : 'Not specified'}
+                                    </div>
                                 </div>
+
+                                <div className="mt-4 pt-4 border-t border-ui-border flex justify-between items-center">
+                                    <span className="text-xs font-mono text-text-muted">
+                                        ID: {internship.internshipId}
+                                    </span>
+                                    <button
+                                        onClick={() => alert(`Applying for ${internship.title}...`)}
+                                        className="px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
+                                    >
+                                        Apply Now
+                                    </button>
+                                </div>
+
                             </div>
                         ))}
                     </div>
@@ -155,4 +170,4 @@ function BrowseInternshipsPage() {
     );
 }
 
-export default BrowseInternshipsPage;
+export default InternshipPage;
