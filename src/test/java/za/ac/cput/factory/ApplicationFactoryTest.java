@@ -30,34 +30,34 @@ class ApplicationFactoryTest {
 
     @Test
     void createApplication(){
-        Application application = ApplicationFactory.createApplication("APP001", "Pending", LocalDateTime.now(), student, internship);
+        Application application = ApplicationFactory.createApplication("APP001", student, internship);
         assertNotNull(application);
         System.out.println(application);
     }
 
     @Test
     void createApplicationWithNullId(){
-        Application application = ApplicationFactory.createApplication(null, "Pending", LocalDateTime.now(), student, internship);
+        Application application = ApplicationFactory.createApplication(null,  student, internship);
         assertNull(application);
     }
     @Test
     void createApplicationWithEmptyStatus(){
-        Application application = ApplicationFactory.createApplication("APP002","",LocalDateTime.now(), student, internship);
+        Application application = ApplicationFactory.createApplication("APP002", student, internship);
         assertNull(application);
     }
     @Test
     void createApplicationWithNullDate(){
-        Application application = ApplicationFactory.createApplication("APP003","Pending", null, student, internship);
+        Application application = ApplicationFactory.createApplication("APP003", student, internship);
         assertNull(application);
     }
     @Test
     void createApplicationWithNullStudent() {
-        Application application = ApplicationFactory.createApplication("APP004", "Pending", LocalDateTime.now(), null, internship);
+        Application application = ApplicationFactory.createApplication("APP004", null, internship);
         assertNull(application);
     }
     @Test
     void createApplicationWithNullInternship(){
-        Application application = ApplicationFactory.createApplication("APP005", "Pending", LocalDateTime.now(), student, null);
+        Application application = ApplicationFactory.createApplication("APP005", student, null);
         assertNull(application);
     }
 }

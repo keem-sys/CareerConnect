@@ -1,5 +1,7 @@
 package za.ac.cput.domain;
 
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -10,13 +12,30 @@ import java.util.Objects;
  * Date: 11 March 2026
  */
 
-public class Application {
+@Entity
+@Table(name = "Application")
 
-    private final String applicationId;
-    private final String status;
-    private final LocalDateTime dateApplied;
-    private final Student student;
-    private final Internship internship;
+public class Application {
+    @Id
+    @Column(name = "application_id", nullable = false, unique = true)
+    private String applicationId;
+
+    @Column(name = "status", nullable = false)
+    private String status;
+
+    @Column(name = "date_applied",  nullable = false)
+    private LocalDateTime dateApplied;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "student_number", nullable = false)
+    private Student student;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "internship_id", nullable = false)
+    private Internship internship;
+
+    protected Application(){
+    }
 
     private Application(Builder builder) {
         this.applicationId = builder.applicationId;
