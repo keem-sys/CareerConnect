@@ -55,7 +55,7 @@ export default function Navbar() {
             return [
                 { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
                 { to: '/internships', label: 'Internships', icon: Briefcase },
-                { to: '/applications', label: 'My Applications', icon: FileText },
+                { to: '/my-applications', label: 'My Applications', icon: FileText },
                 { to: '/profile', label: 'My Profile', icon: User },
             ];
         }
@@ -65,7 +65,7 @@ export default function Navbar() {
             return [
                 { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
                 { to: '/internships', label: 'Manage Postings', icon: Briefcase },
-                { to: '/applications', label: 'Applicants', icon: Users },
+                { to: '/my-applications', label: 'Applicants', icon: Users },
             ];
         }
 

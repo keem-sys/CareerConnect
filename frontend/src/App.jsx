@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Components & Guards
 import Navbar from './components/Navbar';
@@ -16,6 +16,19 @@ import PostInternshipPage from './pages/PostInternshipPage';
 import NotFoundPage from './pages/NotFoundPage';
 import InternshipPage from "./pages/InternshipPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
+import MyApplicationsDashboard from './pages/MyApplicationsDashboard';
+
+function MyApplicationsRoute() {
+    const { user } = useAuth();
+
+    const studentNumber =
+        user?.studentNumber ??
+        user?.student?.studentNumber;
+
+    return (
+        <MyApplicationsDashboard studentId={studentNumber} />
+    );
+}
 
 export default function App() {
     return (
@@ -40,6 +53,12 @@ export default function App() {
                             <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/settings" element={<AdminStudentPage />} />
+
+                                <Route
+                                    path="/my-applications"
+                                    element={<MyApplicationsRoute />}
+                                />
+
                             </Route>
 
                             {/* EMPLOYER PROTECTED ROUTES */}

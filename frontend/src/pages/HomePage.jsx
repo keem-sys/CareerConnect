@@ -198,7 +198,7 @@ function StudentDashboardView({ user }) {
                             Check real-time application status updates ("Pending Review", "Interview Scheduled", "Approved").
                         </p>
                     </div>
-                    <Link to="/applications" className="mt-6 inline-flex items-center space-x-2 text-xs font-semibold text-brand-mint hover:underline">
+                    <Link to="/my-applications" className="mt-6 inline-flex items-center space-x-2 text-xs font-semibold text-brand-mint hover:underline">
                         <span>View My Statuses</span>
                         <ArrowRight className="w-4 h-4" />
                     </Link>

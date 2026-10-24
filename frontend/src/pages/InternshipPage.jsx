@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import internshipService from '../services/internshipService';
+import ApplyButton from '../components/ApplyButton';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 function InternshipPage() {
     const [internships, setInternships] = useState([]);
@@ -7,6 +10,13 @@ function InternshipPage() {
     const [viewMode, setViewMode] = useState('grid');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    const studentNumber =
+        user?.studentNumber ??
+        user?.student?.studentNumber;
 
     useEffect(() => {
         const fetchInternships = async () => {
@@ -152,12 +162,11 @@ function InternshipPage() {
                                     <span className="text-xs font-mono text-text-muted">
                                         ID: {internship.internshipId}
                                     </span>
-                                    <button
-                                        onClick={() => alert(`Applying for ${internship.title}...`)}
-                                        className="px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
-                                    >
-                                        Apply Now
-                                    </button>
+                                    <ApplyButton
+                                        internshipId={internship.internshipId}
+                                        studentNumber={studentNumber}
+                                        onLoginRequired={() => navigate('/login')}
+                                    />
                                 </div>
 
                             </div>
