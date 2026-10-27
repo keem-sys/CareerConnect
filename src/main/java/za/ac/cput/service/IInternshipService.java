@@ -4,19 +4,32 @@ package za.ac.cput.service;
 IInternshipService.java
 Internship Service Interface
 Author: Refilwe Mabena (231013051)
-Date: 8 August 2026
+Date: 27 October 2026
 */
 
-import za.ac.cput.domain.Internship;
+
+import za.ac.cput.dto.request.InternshipRequest;
+import za.ac.cput.dto.response.InternshipResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-public interface IInternshipService extends IService<Internship, String> {
+public interface IInternshipService {
 
-    List<Internship> getInternshipsByLocation(String location);
+    InternshipResponse create(InternshipRequest request);
 
-    List<Internship> getInternshipsByTitle(String title);
+    InternshipResponse read(String id);
 
-    List<Internship> getUpcomingInternships(LocalDateTime deadline);
+    InternshipResponse update(String id, InternshipRequest request);
+
+    boolean delete(String id);
+
+    List<InternshipResponse> getAll();
+
+    List<InternshipResponse> getInternshipsByLocation(String location);
+
+    List<InternshipResponse> getInternshipsByTitle(String title);
+
+    List<InternshipResponse> getUpcomingInternships(
+            LocalDateTime deadline);
 }
