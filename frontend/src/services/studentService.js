@@ -22,13 +22,19 @@ export const readStudent = async (studentNumber) => {
 
 export const updateStudent = async (studentData) => {
     try {
-        const response = await apiClient.put(`/student/update`, studentData);
+        const response = await apiClient.put(
+            `/student/update/${studentData.studentNumber}`,
+            {
+                name: studentData.name,
+                email: studentData.email
+            }
+        );
         return response.data;
     } catch (error) {
         console.error("Error updating student:", error);
         throw error;
     }
-}
+};
 
 export const deleteStudent = async (studentNumber) => {
     try {

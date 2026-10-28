@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import internshipService from '../services/internshipService';
-import { applyForInternship } from '../services/applicationService';
+import { applyForInternship, getStudentApplications } from '../services/applicationService';
+import { getAllInternships } from '../services/internshipService';
 import { useAuth } from '../context/AuthContext';
 import {
     Briefcase,
@@ -16,6 +16,7 @@ import {
 
 function BrowseInternshipsPage() {
     const [internships, setInternships] = useState([]);
+    const [appliedInternshipIds, setAppliedInternshipIds] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('grid');
     const [loading, setLoading] = useState(true);
@@ -25,10 +26,24 @@ function BrowseInternshipsPage() {
     const { user } = useAuth();
 
     useEffect(() => {
-        const fetchInternships = async () => {
+        const loadData = async () => {
             try {
-                const data = await internshipService.getAllInternships();
-                setInternships(data);
+                // 1. Fetch all internship listings
+                const listings = await getAllInternships();
+                setInternships(listings || []);
+
+                // 2. If logged in as student, fetch existing applications to mark them as "Applied"
+                if (user && user.role === 'STUDENT' && user.studentNumber) {
+                    try {
+                        const myApps = await getStudentApplications(user.studentNumber);
+                        const appliedIds = new Set(
+                            myApps.map((app) => app.internship?.internshipId || app.internship?.id)
+                        );
+                        setAppliedInternshipIds(appliedIds);
+                    } catch (appErr) {
+                        console.warn('Could not pre-load student applications:', appErr);
+                    }
+                }
             } catch (err) {
                 console.error(err);
                 setError('Failed to load internships. Ensure Spring Boot is running.');
@@ -37,8 +52,8 @@ function BrowseInternshipsPage() {
             }
         };
 
-        fetchInternships();
-    }, []);
+        loadData();
+    }, [user]);
 
     const filteredInternships = internships.filter((internship) => {
         const title = internship.title?.toLowerCase() || '';
@@ -78,8 +93,11 @@ function BrowseInternshipsPage() {
         setApplyingId(internshipId);
 
         try {
-            // Consume Lefa's Application endpoint via applicationService
             await applyForInternship(user.studentNumber, internshipId);
+
+            // Immediately mark this internship as applied in state
+            setAppliedInternshipIds((prev) => new Set([...prev, internshipId]));
+
             setActionMessage({
                 type: 'success',
                 text: 'Application submitted successfully! You can track its status in your dashboard.'
@@ -114,7 +132,7 @@ function BrowseInternshipsPage() {
                     </div>
                 </div>
 
-                {/* Status / Feedback Banner (Replaces native browser alert) */}
+                {/* Status / Feedback Banner */}
                 {actionMessage && (
                     <div className={`flex items-center space-x-2 p-4 rounded-xl font-medium text-xs border shadow-sm ${
                         actionMessage.type === 'success'
@@ -201,12 +219,14 @@ function BrowseInternshipsPage() {
                 {!loading && !error && filteredInternships.length > 0 && (
                     <div className={viewMode === 'grid' ? 'grid gap-6 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col gap-4'}>
                         {filteredInternships.map((internship) => {
+                            const currentId = internship.internshipId || internship.id;
                             const isExpired = internship.deadline && new Date(internship.deadline) < new Date();
-                            const isApplying = applyingId === (internship.internshipId || internship.id);
+                            const isApplying = applyingId === currentId;
+                            const hasApplied = appliedInternshipIds.has(currentId);
 
                             return (
                                 <div
-                                    key={internship.internshipId || internship.id}
+                                    key={currentId}
                                     className="rounded-2xl border border-ui-border bg-card-bg p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
                                 >
                                     <div className="space-y-3">
@@ -242,32 +262,46 @@ function BrowseInternshipsPage() {
                                         </div>
                                     </div>
 
-                                    {/* Footer with Styled Button */}
+                                    {/* Footer with Reactive State-Aware Button */}
                                     <div className="mt-6 pt-4 border-t border-ui-border flex justify-between items-center">
                                         <span className="text-[11px] font-mono text-text-muted">
-                                            ID: {internship.internshipId || internship.id}
+                                            ID: {currentId}
                                         </span>
 
-                                        <button
-                                            onClick={() => handleApply(internship.internshipId || internship.id, internship.deadline)}
-                                            disabled={isExpired || isApplying}
-                                            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center space-x-1.5 shadow-sm ${
-                                                isExpired
-                                                    ? 'bg-app-bg text-text-subtle border border-ui-border cursor-not-allowed opacity-60'
-                                                    : 'bg-brand-primary hover:bg-brand-primary-hover text-white shadow-brand-primary/20 hover:scale-[1.02]'
-                                            }`}
-                                        >
-                                            {isApplying ? (
-                                                <>
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                    <span>Applying...</span>
-                                                </>
-                                            ) : isExpired ? (
+                                        {hasApplied ? (
+                                            /* State 1: Already Applied */
+                                            <button
+                                                disabled
+                                                className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1.5 cursor-default shadow-xs"
+                                            >
+                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                <span>Applied</span>
+                                            </button>
+                                        ) : isExpired ? (
+                                            /* State 2: Closed / Expired */
+                                            <button
+                                                disabled
+                                                className="px-4 py-2 rounded-xl text-xs font-semibold bg-app-bg text-text-subtle border border-ui-border cursor-not-allowed opacity-60"
+                                            >
                                                 <span>Deadline Expired</span>
-                                            ) : (
-                                                <span>Apply Now</span>
-                                            )}
-                                        </button>
+                                            </button>
+                                        ) : (
+                                            /* State 3: Active & Open to Apply */
+                                            <button
+                                                onClick={() => handleApply(currentId, internship.deadline)}
+                                                disabled={isApplying}
+                                                className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-primary hover:bg-brand-primary-hover text-white shadow-brand-primary/20 shadow-sm transition-all hover:scale-[1.02] cursor-pointer flex items-center space-x-1.5 disabled:opacity-75 disabled:cursor-wait"
+                                            >
+                                                {isApplying ? (
+                                                    <>
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        <span>Applying...</span>
+                                                    </>
+                                                ) : (
+                                                    <span>Apply Now</span>
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );

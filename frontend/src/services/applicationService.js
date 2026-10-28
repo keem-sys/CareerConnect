@@ -1,10 +1,5 @@
 import apiClient from './apiClient';
 
-/*
- * applicationService.js
- * Consuming Spring Boot Application REST APIs
- */
-
 export const applyForInternship = async (studentNumber, internshipId) => {
     try {
         const response = await apiClient.post('/application/create', {
@@ -28,19 +23,34 @@ export const getStudentApplications = async (studentNumber) => {
     }
 };
 
-export const getInternshipApplicants = async (internshipId) => {
+// For Employers: Fetch all applicants across listings
+export const getAllApplications = async () => {
     try {
-        const response = await apiClient.get(`/application/internship/${internshipId}`);
+        const response = await apiClient.get('/application/getAll');
         return response.data;
     } catch (error) {
-        console.error("Error fetching applicants:", error);
+        console.error("Error fetching all applications:", error);
         throw error;
     }
 };
 
+// For Employers: Fetch applicants for a specific internship ID
+export const getCompanyApplications = async (companyId) => {
+    try {
+        const response = await apiClient.get(`/application/company/${companyId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching company applications:", error);
+        throw error;
+    }
+};
+
+// For Employers: Live decision button (Approved / Rejected)
 export const updateApplicationStatus = async (applicationId, status) => {
     try {
-        const response = await apiClient.put(`/application/update/${applicationId}?status=${status}`);
+        const response = await apiClient.put(`/application/update/${applicationId}`, null, {
+            params: { status }
+        });
         return response.data;
     } catch (error) {
         console.error("Error updating application status:", error);

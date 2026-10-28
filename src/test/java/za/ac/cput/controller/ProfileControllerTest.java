@@ -7,11 +7,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 import za.ac.cput.domain.Profile;
+import za.ac.cput.domain.Student;
 import za.ac.cput.factory.ProfileFactory;
+import za.ac.cput.repository.StudentRepository;
 import za.ac.cput.service.IProfileService;
 
 import java.util.Collections;
@@ -37,6 +41,8 @@ public class ProfileControllerTest {
     private MockMvc mockMvc;
     @MockitoBean
     private IProfileService profileService;
+    @MockitoBean
+    private StudentRepository studentRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -51,6 +57,11 @@ public class ProfileControllerTest {
                 Collections.singletonList("Java"),
                 "https://example.com/resume.pdf"
         );
+        Student student = new Student.Builder()
+                .setStudentNumber(profile.getStudentNumber())
+                .setEmail("230716873@mycput.ac.za")
+                .build();
+        when(studentRepository.findByEmail("230716873@mycput.ac.za")).thenReturn(Optional.of(student));
     }
 
     @Test
@@ -58,7 +69,8 @@ public class ProfileControllerTest {
         when(profileService.create(any(Profile.class))).thenReturn(profile);
         mockMvc.perform(post("/api/profile/create")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(profile)))
+                        .content(objectMapper.writeValueAsString(profile))
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk());
 
         verify(profileService, times(1)).create(any(Profile.class));
@@ -67,7 +79,8 @@ public class ProfileControllerTest {
     @Test
     void read_Success() throws Exception {
         when(profileService.read(anyString())).thenReturn(profile);
-        mockMvc.perform(get("/api/profile/read/" + profile.getProfileId()))
+        mockMvc.perform(get("/api/profile/read/" + profile.getProfileId())
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk());
         verify(profileService, times(1)).read(anyString());
     }
@@ -77,7 +90,8 @@ public class ProfileControllerTest {
         when(profileService.update(any(Profile.class))).thenReturn(profile);
         mockMvc.perform(put("/api/profile/update")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(profile)))
+                        .content(objectMapper.writeValueAsString(profile))
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk());
         verify(profileService, times(1)).update(any(Profile.class));
     }
@@ -85,7 +99,9 @@ public class ProfileControllerTest {
     @Test
     void delete_Success() throws Exception {
         when(profileService.delete(anyString())).thenReturn(true);
-        mockMvc.perform(delete("/api/profile/delete/" + profile.getProfileId()))
+        when(profileService.read(profile.getProfileId())).thenReturn(profile);
+        mockMvc.perform(delete("/api/profile/delete/" + profile.getProfileId())
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk());
         verify(profileService, times(1)).delete(anyString());
     }
@@ -100,8 +116,17 @@ public class ProfileControllerTest {
     @Test
     void getByStudentNumber_Success() throws Exception {
         when(profileService.getProfileByStudentNumber(anyString())).thenReturn(Optional.of(profile));
-        mockMvc.perform(get("/api/profile/student/" + profile.getStudentNumber()))
+        mockMvc.perform(get("/api/profile/student/" + profile.getStudentNumber())
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk());
         verify(profileService, times(1)).getProfileByStudentNumber(anyString());
+    }
+
+    private UsernamePasswordAuthenticationToken studentAuthentication() {
+        return new UsernamePasswordAuthenticationToken(
+                "230716873@mycput.ac.za",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))
+        );
     }
 }

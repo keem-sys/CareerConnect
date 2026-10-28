@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -15,7 +15,8 @@ import {
     X,
     LogOut,
     LogIn,
-    UserPlus
+    UserPlus,
+    PlusCircle
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -34,14 +35,14 @@ export default function Navbar() {
     };
 
     const navLinkClass = ({ isActive }) =>
-        `flex items-center space-x-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+        `flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
             isActive
-                ? 'text-brand-accent bg-brand-accent/10 border border-brand-accent/20 font-semibold'
-                : 'text-text-muted hover:text-text-main hover:bg-card-bg'
+                ? 'text-brand-primary bg-slate-100 font-bold'
+                : 'text-text-muted hover:text-text-main hover:bg-slate-50'
         }`;
 
     const getNavLinks = () => {
-        // GUEST LINKS (NOT LOGGED IN)
+        // GUEST LINKS
         if (!user) {
             return [
                 { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
@@ -53,7 +54,7 @@ export default function Navbar() {
         // STUDENT LINKS
         if (user.role === 'STUDENT') {
             return [
-                { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
+                { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
                 { to: '/internships', label: 'Internships', icon: Briefcase },
                 { to: '/applications', label: 'My Applications', icon: FileText },
                 { to: '/profile', label: 'My Profile', icon: User },
@@ -63,16 +64,17 @@ export default function Navbar() {
         // COMPANY / EMPLOYER LINKS
         if (user.role === 'COMPANY') {
             return [
-                { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
-                { to: '/internships', label: 'Manage Postings', icon: Briefcase },
-                { to: '/applications', label: 'Applicants', icon: Users },
+                { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+                { to: '/company/postings', label: 'My Postings', icon: Briefcase },
+                { to: '/company/applicants', label: 'Applicants', icon: Users },
+                { to: '/internships', label: 'Browse Internships', icon: Search, end: true },
             ];
         }
 
         // ADMIN LINKS
         if (user.role === 'ADMIN') {
             return [
-                { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
+                { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
                 { to: '/admin/students', label: 'Students', icon: Users },
                 { to: '/companies', label: 'Companies', icon: Building2 },
                 { to: '/internships', label: 'Internships', icon: Briefcase },
@@ -85,30 +87,28 @@ export default function Navbar() {
     const navLinks = getNavLinks();
 
     return (
-        <header className="sticky top-0 z-50 w-full bg-app-bg/85 backdrop-blur-md border-b border-ui-border">
+        <header className="sticky top-0 z-50 w-full bg-card-bg/95 backdrop-blur-md border-b border-ui-border">
             <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-between h-20">
+                <div className="flex items-center justify-between h-16">
 
-                    {/* Branding & Logo */}
+                    {/* 1. LEFT: Branding & Logo */}
                     <div className="flex items-center space-x-3">
-                        <Link to="/" className="flex items-center space-x-3 group">
-                            <div className="bg-brand-accent/10 border border-brand-accent/30 p-2.5 rounded-2xl text-brand-accent group-hover:scale-105 transition-transform duration-200">
-                                <GraduationCap className="w-6 h-6" />
+                        <Link to="/" className="flex items-center space-x-2.5 group">
+                            <div className="bg-brand-primary/10 border border-brand-accent/20 p-2 rounded-xl text-brand-primary group-hover:scale-105 transition-transform">
+                                <GraduationCap className="w-5 h-5 text-brand-accent" />
                             </div>
-                            <div>
-                                <div className="flex items-center space-x-2">
-                                    <span className="font-heading font-extrabold text-xl text-text-main tracking-tight group-hover:text-brand-accent transition-colors">
-                                        CareerConnect
-                                    </span>
-                                    <span className="font-mono text-[10px] bg-card-bg border border-ui-border text-brand-accent px-2 py-0.5 rounded-full font-semibold">
-                                        CPUT
-                                    </span>
-                                </div>
+                            <div className="flex items-center space-x-1.5">
+                                <span className="font-heading font-extrabold text-lg text-text-main tracking-tight">
+                                    CareerConnect
+                                </span>
+                                <span className="font-mono text-[9px] bg-slate-100 border border-ui-border text-brand-accent px-1.5 py-0.2 rounded font-semibold">
+                                    CPUT
+                                </span>
                             </div>
                         </Link>
                     </div>
 
-                    {/* Dynamic Navigation Links */}
+                    {/* 2. CENTER: Clean Navigation Links */}
                     <div className="hidden md:flex items-center space-x-1">
                         {navLinks.map((link) => {
                             const Icon = link.icon;
@@ -119,92 +119,100 @@ export default function Navbar() {
                                     className={navLinkClass}
                                     end={link.end}
                                 >
-                                    <Icon className="w-4 h-4" />
+                                    <Icon className="w-3.5 h-3.5 opacity-70" />
                                     <span>{link.label}</span>
                                 </NavLink>
                             );
                         })}
                     </div>
 
-                    {/* Actions & User Profile */}
-                    <div className="hidden md:flex items-center space-x-4">
+                    {/* 3. RIGHT: Actions, Dedicated "+ Post Job" CTA & User Profile */}
+                    <div className="hidden md:flex items-center space-x-3">
+
+                        {/* 🌟 DEDICATED "+ Post Internship" BUTTON FOR EMPLOYERS */}
+                        {user?.role === 'COMPANY' && (
+                            <Link
+                                to="/internships/new"
+                                className="inline-flex items-center space-x-1.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold px-3 py-1.5 rounded-xl shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
+                            >
+                                <PlusCircle className="w-3.5 h-3.5" />
+                                <span>Post Internship</span>
+                            </Link>
+                        )}
 
                         {/* Search Shortcut */}
-                        <button className="flex items-center space-x-2 bg-card-bg/80 border border-ui-border hover:border-brand-accent/40 text-text-muted hover:text-text-main px-3 py-1.5 rounded-xl text-xs transition-all">
-                            <Search className="w-3.5 h-3.5 text-brand-accent" />
-                            <span>Search...</span>
-                            <kbd className="font-mono bg-app-bg text-[10px] text-text-muted border border-ui-border px-1.5 py-0.5 rounded-md">
+                        <button className="flex items-center space-x-2 bg-slate-50 border border-ui-border hover:border-brand-accent/40 text-text-muted hover:text-text-main px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer">
+                            <Search className="w-3 h-3 text-brand-accent" />
+                            <span className="text-[11px]">Search...</span>
+                            <kbd className="font-mono bg-white text-[9px] text-text-muted border border-ui-border px-1 py-0.2 rounded">
                                 Ctrl K
                             </kbd>
                         </button>
 
-                        {/* IF USER IS LOGGED IN */}
+                        {/* User Profile / Guest State */}
                         {user ? (
-                            <div className="flex items-center space-x-3 pl-2 border-l border-ui-border">
-                                <button className="relative p-2 text-text-muted hover:text-text-main bg-card-bg/50 hover:bg-card-bg border border-ui-border rounded-xl transition-colors">
-                                    <Bell className="w-4 h-4" />
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-mint rounded-full animate-pulse" />
+                            <div className="flex items-center space-x-2.5 pl-2 border-l border-ui-border">
+                                <button className="relative p-1.5 text-text-muted hover:text-text-main hover:bg-slate-50 border border-ui-border rounded-xl transition-colors cursor-pointer">
+                                    <Bell className="w-3.5 h-3.5" />
+                                    <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-brand-mint rounded-full animate-pulse" />
                                 </button>
 
-                                <div className="w-9 h-9 rounded-xl bg-linear-to-tr from-brand-primary to-brand-accent flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                <div className="w-8 h-8 rounded-xl bg-linear-to-tr from-brand-primary to-brand-accent flex items-center justify-center text-white font-bold text-xs shadow-sm">
                                     {getInitials(user.name)}
                                 </div>
 
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-text-main leading-tight">
+                                <div className="flex flex-col text-left">
+                                    <span className="text-xs font-bold text-text-main leading-none">
                                         {user.name}
                                     </span>
-                                    <span className="font-mono text-[10px] font-semibold text-brand-mint bg-brand-mint/10 border border-brand-mint/20 px-1.5 py-0.5 rounded mt-0.5 w-fit">
-                                        {user.role || 'STUDENT'}
+                                    <span className="font-mono text-[9px] font-semibold text-brand-mint bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded mt-0.5 w-fit leading-none">
+                                        {user.role}
                                     </span>
                                 </div>
 
                                 <button
                                     onClick={handleLogout}
                                     title="Log Out"
-                                    className="p-2 ml-1 mr-1 text-text-muted hover:text-rose-600 bg-card-bg hover:bg-rose-50 border border-ui-border hover:border-rose-200 rounded-xl transition-all cursor-pointer shadow-sm"
+                                    className="p-1.5 text-text-muted hover:text-rose-600 bg-card-bg hover:bg-rose-50 border border-ui-border hover:border-rose-200 rounded-xl transition-all cursor-pointer shadow-sm"
                                 >
-                                    <LogOut className="w-4 h-4" />
+                                    <LogOut className="w-3.5 h-3.5" />
                                 </button>
                             </div>
                         ) : (
-                            /* IF NO USER IS LOGGED IN (GUEST STATE) */
-                            <div className="flex items-center space-x-3 pl-2 border-l border-ui-border">
+                            <div className="flex items-center space-x-2 pl-2 border-l border-ui-border">
                                 <Link
                                     to="/login"
-                                    className="flex items-center space-x-1.5 text-xs font-medium text-text-muted hover:text-text-main px-3 py-2 rounded-xl hover:bg-card-bg/60 transition-all"
+                                    className="text-xs font-medium text-text-muted hover:text-text-main px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-all"
                                 >
-                                    <LogIn className="w-3.5 h-3.5" />
-                                    <span>Sign In</span>
+                                    Sign In
                                 </Link>
 
                                 <Link
                                     to="/signup"
-                                    className="flex items-center space-x-1.5 text-xs font-semibold bg-brand-primary hover:bg-brand-primary-hover text-white px-4 py-2 rounded-xl shadow-md shadow-brand-primary/20 hover:scale-105 transition-all"
+                                    className="text-xs font-semibold bg-brand-primary hover:bg-brand-primary-hover text-white px-3.5 py-1.5 rounded-xl shadow-sm transition-all hover:scale-[1.02]"
                                 >
-                                    <UserPlus className="w-3.5 h-3.5" />
-                                    <span>Register</span>
+                                    Register
                                 </Link>
                             </div>
                         )}
 
                     </div>
 
-                    {/* Hamburger Toggle */}
+                    {/* Mobile Hamburger Toggle */}
                     <div className="md:hidden flex items-center">
                         <button
                             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                            className="p-2.5 rounded-xl text-text-muted hover:text-text-main bg-card-bg border border-ui-border"
+                            className="p-2 rounded-xl text-text-muted hover:text-text-main border border-ui-border"
                         >
-                            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                         </button>
                     </div>
 
                 </div>
 
-                {/* MOBILE MENU OVERLAY */}
+                {/* Mobile Menu Overlay */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden py-4 border-t border-ui-border space-y-2 animate-fadeIn">
+                    <div className="md:hidden py-4 border-t border-ui-border space-y-2">
                         {navLinks.map((link) => {
                             const Icon = link.icon;
                             return (
@@ -220,45 +228,16 @@ export default function Navbar() {
                             );
                         })}
 
-                        {/* Mobile Auth / Profile Section */}
-                        <div className="pt-4 mt-4 border-t border-ui-border px-3">
-                            {user ? (
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs">
-                                            {getInitials(user.name)}
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-text-main">{user.name}</p>
-                                            <p className="font-mono text-[10px] text-brand-mint">{user.studentNumber || user.email}</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
-                                        className="text-xs text-rose-600 hover:text-rose-700 font-semibold bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                                    >
-                                        Log Out
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Link
-                                        to="/login"
-                                        onClick={() => setMobileMenuOpen(false)}
-                                        className="text-center text-xs font-medium text-text-main bg-card-bg border border-ui-border py-2.5 rounded-xl"
-                                    >
-                                        Sign In
-                                    </Link>
-                                    <Link
-                                        to="/signup"
-                                        onClick={() => setMobileMenuOpen(false)}
-                                        className="text-center text-xs font-semibold text-white bg-brand-primary py-2.5 rounded-xl shadow-md"
-                                    >
-                                        Register
-                                    </Link>
-                                </div>
-                            )}
-                        </div>
+                        {user?.role === 'COMPANY' && (
+                            <Link
+                                to="/internships/new"
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="flex items-center space-x-2 px-3 py-2 text-xs font-semibold bg-brand-primary text-white rounded-lg"
+                            >
+                                <PlusCircle className="w-4 h-4" />
+                                <span>Post Internship</span>
+                            </Link>
+                        )}
                     </div>
                 )}
             </nav>

@@ -7,14 +7,21 @@
 
 package za.ac.cput.domain;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 import java.util.Objects;
 
+@Entity
 public class Admin {
 
-    private final String adminId;
-    private final String name;
-    private final String email;
-    private final String password;
+    @Id
+    private String adminId;
+    private String name;
+    private String email;
+    private String password;
+
+    protected Admin() {
+    }
 
     private Admin(Builder builder) {
         this.adminId = builder.adminId;

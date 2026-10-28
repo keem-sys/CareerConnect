@@ -10,6 +10,8 @@ import za.ac.cput.domain.Application;
 import za.ac.cput.domain.Internship;
 import za.ac.cput.domain.Student;
 import za.ac.cput.repository.ApplicationRepository;
+import za.ac.cput.repository.InternshipRepository;
+import za.ac.cput.repository.StudentRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +28,10 @@ class ApplicationServiceTest {
 
     @Mock
     private ApplicationRepository repository;
+    @Mock
+    private StudentRepository studentRepository;
+    @Mock
+    private InternshipRepository internshipRepository;
 
     @InjectMocks
     private ApplicationService applicationService;
@@ -39,6 +45,7 @@ class ApplicationServiceTest {
     void setUp() {
         student = new Student.Builder()
                 .setStudentNumber("ST-2026-001")
+                .setEmail("student@mycput.ac.za")
                 .build();
 
         futureInternship = new Internship.Builder()
@@ -61,12 +68,17 @@ class ApplicationServiceTest {
 
     @Test
     void apply_ShouldSaveApplication_WhenValid() {
+        when(studentRepository.findById(student.getStudentNumber())).thenReturn(Optional.of(student));
+        when(internshipRepository.findById(futureInternship.getInternshipId())).thenReturn(Optional.of(futureInternship));
         when(repository.existsByStudent_StudentNumberAndInternship_InternshipId(
                 student.getStudentNumber(), futureInternship.getInternshipId()))
                 .thenReturn(false);
         when(repository.save(any(Application.class))).thenReturn(existingApplication);
 
-        Application result = applicationService.apply(student, futureInternship);
+        Application result = applicationService.apply(
+                student.getStudentNumber(),
+                futureInternship.getInternshipId()
+        );
 
         assertNotNull(result);
         assertEquals("Pending", result.getStatus());
@@ -75,28 +87,46 @@ class ApplicationServiceTest {
 
     @Test
     void apply_ShouldThrow_WhenDeadlineHasPassed() {
+        when(studentRepository.findById(student.getStudentNumber())).thenReturn(Optional.of(student));
+        when(internshipRepository.findById(pastInternship.getInternshipId())).thenReturn(Optional.of(pastInternship));
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> applicationService.apply(student, pastInternship)
+                () -> applicationService.apply(
+                        student.getStudentNumber(),
+                        pastInternship.getInternshipId()
+                )
         );
 
-        assertEquals("Cannot apply for internship after the deadline.", exception.getMessage());
+        assertEquals("Cannot apply: The deadline for this internship has passed.", exception.getMessage());
         verify(repository, never()).save(any(Application.class));
     }
 
     @Test
     void apply_ShouldThrow_WhenDuplicateApplicationExists() {
+        when(studentRepository.findById(student.getStudentNumber())).thenReturn(Optional.of(student));
+        when(internshipRepository.findById(futureInternship.getInternshipId())).thenReturn(Optional.of(futureInternship));
         when(repository.existsByStudent_StudentNumberAndInternship_InternshipId(
                 student.getStudentNumber(), futureInternship.getInternshipId()))
                 .thenReturn(true);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> applicationService.apply(student, futureInternship)
+                () -> applicationService.apply(
+                        student.getStudentNumber(),
+                        futureInternship.getInternshipId()
+                )
         );
 
-        assertEquals("Student has already applied for this internship.", exception.getMessage());
+        assertEquals("You have already applied for this internship.", exception.getMessage());
         verify(repository, never()).save(any(Application.class));
+    }
+
+    @Test
+    void isStudentOwner_ShouldMatchRegisteredEmail() {
+        when(studentRepository.findById(student.getStudentNumber())).thenReturn(Optional.of(student));
+
+        assertTrue(applicationService.isStudentOwner(student.getStudentNumber(), student.getEmail()));
+        assertFalse(applicationService.isStudentOwner(student.getStudentNumber(), "other@mycput.ac.za"));
     }
 
     @Test

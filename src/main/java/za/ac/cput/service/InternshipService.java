@@ -35,6 +35,7 @@ public class InternshipService implements IInternshipService {
                 internship.getTitle(),
                 internship.getDescription(),
                 internship.getLocation(),
+                internship.getCompanyId(),
                 internship.getDeadline()
         );
 

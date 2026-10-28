@@ -19,4 +19,5 @@ public interface ApplicationRepository extends JpaRepository<Application, String
     List<Application> findByInternship_InternshipId(String internshipId);
     List<Application> findByStatus(String status);
     boolean existsByStudent_StudentNumberAndInternship_InternshipId(String studentNumber, String internshipId);
+    List<Application> findByInternship_CompanyId(String companyId);
 }

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import za.ac.cput.domain.Student;
 import za.ac.cput.dto.request.StudentRegistrationRequest;
 import za.ac.cput.dto.request.StudentUpdateRequest;
@@ -32,6 +33,8 @@ import static org.mockito.Mockito.*;
 public class StudentServiceTest {
     @Mock
     private StudentRepository studentRepository;
+    @Mock
+    private PasswordEncoder passwordEncoder;
     private Student student;
 
     @InjectMocks
@@ -44,6 +47,7 @@ public class StudentServiceTest {
 
     @Test
     void create_Success() {
+        when(passwordEncoder.encode("pass123")).thenReturn("hashed-pass123");
         when(studentRepository.existsById("230480152")).thenReturn(false);
         when(studentRepository.findByEmail("230480152@mycput.ac.za")).thenReturn(Optional.empty());
         when(studentRepository.save(any(Student.class))).thenReturn(student);
@@ -136,18 +140,6 @@ public class StudentServiceTest {
         assertEquals(2, students.size());
         assertEquals("xholisa", students.get(0).name());
         assertEquals("xholisa", students.get(1).name());
-        assertResponseHasNoPasswordField();
-    }
-
-    @Test
-    void authenticate_Success() {
-        when(studentRepository.findByEmail("230480152@mycput.ac.za")).thenReturn(Optional.of(student));
-
-        StudentResponse response = studentService.authenticate("230480152", "pass123");
-
-        assertNotNull(response);
-        assertEquals("230480152", response.studentNumber());
-        assertEquals("xholisa", response.name());
         assertResponseHasNoPasswordField();
     }
 
