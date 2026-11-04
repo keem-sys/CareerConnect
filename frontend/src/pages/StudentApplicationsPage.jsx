@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, Search, MapPin, CalendarDays, Check, X, ChevronDown, ChevronUp, Undo2 } from 'lucide-react';
+import {
+    Briefcase, Search, MapPin, CalendarDays, Check, X, ChevronDown, ChevronUp, Undo2,
+    Sparkles, Calendar, Clock, Banknote, FileCheck, ExternalLink, Building2,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { getStudentApplications, withdrawApplication } from '../services/applicationService';
@@ -8,7 +11,7 @@ import {
     PageContainer, PageHeader, Card, Button, StatusBadge, Tabs, EmptyState, Skeleton, Alert, CompanyLogo,
     ConfirmDialog, cx,
 } from '../components/ui';
-import { STATUS_META, ACTIVE_STATUSES, formatDate, workModeLabel, errorMessage } from '../lib/format';
+import { STATUS_META, ACTIVE_STATUSES, formatDate, formatStipend, workModeLabel, errorMessage } from '../lib/format';
 
 const STEPS = [
     { status: 'PENDING', label: 'Submitted' },
@@ -84,6 +87,102 @@ function ProgressTracker({ status }) {
     );
 }
 
+function OfferReceivedCard({ app }) {
+    const internship = app.internship ?? {};
+    const mode = workModeLabel(internship.workMode);
+    const stipend = formatStipend(internship.stipend);
+
+    return (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 space-y-4">
+            {/* Header */}
+            <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Sparkles className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 mb-1">
+                        Placement Offer
+                    </div>
+                    <h4 className="text-base font-bold text-emerald-950">
+                        Official Internship Offer Received!
+                    </h4>
+                    <p className="text-sm text-emerald-800 mt-0.5">
+                        Congratulations! <strong className="font-semibold text-emerald-900">{internship.companyName || 'The employer'}</strong> has selected you for this internship.
+                    </p>
+                </div>
+            </div>
+
+            {/* Offer Key Logistics */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-emerald-200/80 text-sm">
+                <div className="bg-white/90 rounded-lg p-2.5 border border-emerald-200/70">
+                    <span className="text-xs text-emerald-700 block font-medium">Proposed Start Date</span>
+                    <span className="font-semibold text-text-main flex items-center gap-1.5 mt-0.5">
+                        <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        {internship.startDate ? formatDate(internship.startDate) : 'To be confirmed'}
+                    </span>
+                </div>
+                <div className="bg-white/90 rounded-lg p-2.5 border border-emerald-200/70">
+                    <span className="text-xs text-emerald-700 block font-medium">Monthly Stipend</span>
+                    <span className="font-semibold text-text-main flex items-center gap-1.5 mt-0.5">
+                        <Banknote className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        {stipend ?? 'Disclosed in contract'}
+                    </span>
+                </div>
+                <div className="bg-white/90 rounded-lg p-2.5 border border-emerald-200/70">
+                    <span className="text-xs text-emerald-700 block font-medium">Duration & Mode</span>
+                    <span className="font-semibold text-text-main flex items-center gap-1.5 mt-0.5">
+                        <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        {internship.durationMonths ? `${internship.durationMonths} months` : 'Fixed-term'}
+                        {mode ? ` · ${mode}` : ''}
+                    </span>
+                </div>
+            </div>
+
+            {/* Recommended Next Steps */}
+            <div className="rounded-lg bg-white/95 border border-emerald-200/80 p-3.5 space-y-2 text-xs sm:text-sm">
+                <p className="font-semibold text-emerald-950 flex items-center gap-1.5">
+                    <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    What you should do next:
+                </p>
+                <ul className="space-y-1.5 text-text-muted pl-1">
+                    <li className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <span><strong className="text-text-main font-medium">Check your student email:</strong> The employer will reach out with your formal offer letter, contract, or onboarding paperwork.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <span><strong className="text-text-main font-medium">Submit CPUT WIL Documentation:</strong> Share the job description and company details with your CPUT departmental WIL coordinator for internship course credit.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                        <span><strong className="text-text-main font-medium">Manage other applications:</strong> Once you confirm this placement, consider withdrawing other active applications so fellow classmates can be considered.</span>
+                    </li>
+                </ul>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Link
+                    to={`/internships/${internship.internshipId}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
+                >
+                    View Role Description
+                    <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+                {internship.companyName && (
+                    <Link
+                        to="/companies"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-emerald-900 border border-emerald-300 hover:bg-emerald-50 transition"
+                    >
+                        <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+                        Company Directory
+                    </Link>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function ApplicationRow({ app, onWithdraw }) {
     const [expanded, setExpanded] = useState(false);
     const internship = app.internship ?? {};
@@ -125,8 +224,12 @@ function ApplicationRow({ app, onWithdraw }) {
 
             <div className="mt-5">
                 <ProgressTracker status={app.status} />
-                {STATUS_META[app.status]?.description && (
-                    <p className="mt-3 text-sm text-text-muted">{STATUS_META[app.status].description}.</p>
+                {app.status === 'ACCEPTED' ? (
+                    <OfferReceivedCard app={app} />
+                ) : (
+                    STATUS_META[app.status]?.description && (
+                        <p className="mt-3 text-sm text-text-muted">{STATUS_META[app.status].description}.</p>
+                    )
                 )}
             </div>
 

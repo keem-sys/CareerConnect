@@ -97,7 +97,8 @@ void read_Success() throws Exception {
 
 @Test
 void update_Success() throws Exception {
-    when(internshipService.update(any(Internship.class)))
+    when(internshipService.read(anyString())).thenReturn(internship);
+        when(internshipService.update(any(Internship.class)))
             .thenReturn(internship);
 
     mockMvc.perform(put("/api/internship/update")

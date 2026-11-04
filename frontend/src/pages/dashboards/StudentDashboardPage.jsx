@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Briefcase, Activity, Star, Award, ArrowRight, Search, CheckCircle2, MapPin, CalendarClock, UserCircle,
+    Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getStudentStats } from '../../services/statsService';
@@ -136,6 +137,27 @@ export default function StudentDashboardPage() {
             />
 
             {statsError && <Alert className="mb-6">{statsError}</Alert>}
+
+            {stats?.offers > 0 && (
+                <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                    <div className="flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <Sparkles className="w-5 h-5" />
+                        </span>
+                        <div>
+                            <h3 className="font-semibold text-emerald-950">
+                                You have {stats.offers} active internship offer{stats.offers > 1 ? 's' : ''}!
+                            </h3>
+                            <p className="text-sm text-emerald-800">
+                                Review your proposed start date, stipend, and recommended CPUT onboarding steps.
+                            </p>
+                        </div>
+                    </div>
+                    <Button to="/applications" variant="success" size="sm" className="shrink-0">
+                        View offer details
+                    </Button>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <StatCard label="Total applications" value={stats?.totalApplications ?? 0} icon={Briefcase} loading={statsLoading} />
