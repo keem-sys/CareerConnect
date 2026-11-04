@@ -12,24 +12,36 @@ const DEFAULT_BENEFITS = [
 export function AuthLayout({ title, text, benefits = DEFAULT_BENEFITS, children }) {
     return (
         <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 bg-app-bg">
-            <div className="hidden lg:flex flex-col justify-between bg-primary-700 text-white p-10 xl:p-14">
-                <Link to="/" className="inline-flex items-center gap-2 font-semibold text-lg">
-                    <span className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center"><GraduationCap className="w-5 h-5" /></span>
-                    CareerConnect
+            <div className="relative hidden overflow-hidden bg-linear-to-br from-primary-900 via-primary-800 to-primary-700 p-8 text-white lg:flex lg:flex-col lg:justify-between lg:gap-16 xl:p-12">
+                <div aria-hidden="true" className="pointer-events-none absolute -right-40 -top-40 size-120 rounded-full border border-white/10" />
+                <div aria-hidden="true" className="pointer-events-none absolute -bottom-64 -left-40 size-144 rounded-full border border-white/10" />
+                <Link to="/" className="relative inline-flex w-fit items-center gap-3 rounded-lg text-lg font-semibold focus-visible:outline-white">
+                    <span className="flex size-10 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+                        <GraduationCap className="size-5" />
+                    </span>
+                    <span>Career<span className="text-primary-200">Connect</span></span>
                 </Link>
-                <div className="max-w-md">
-                    <h2 className="text-3xl font-bold leading-tight">{title}</h2>
-                    <p className="mt-3 text-primary-100">{text}</p>
-                    <ul className="mt-8 space-y-4">
-                        {benefits.map((b) => (
-                            <li key={b} className="flex items-start gap-3 text-primary-50">
-                                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-primary-200" />
-                                <span>{b}</span>
-                            </li>
-                        ))}
-                    </ul>
+                <div className="relative mx-auto w-full max-w-md">
+                    <p className="mb-5 text-xs font-semibold uppercase tracking-[0.18em] text-primary-200">
+                        Your next chapter starts here
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.15] text-white xl:text-4xl">{title}</h2>
+                    <p className="mt-5 text-base leading-relaxed text-primary-100">{text}</p>
+                    <div className="mt-9 border-t border-white/15 pt-7">
+                        <ul className="space-y-5">
+                            {benefits.map((b) => (
+                                <li key={b} className="flex items-start gap-3 text-sm leading-relaxed text-primary-50">
+                                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary-200" />
+                                    <span>{b}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
-                <p className="text-sm text-primary-200">Cape Peninsula University of Technology - Work Integrated Learning</p>
+                <div className="relative border-t border-white/15 pt-5 text-xs leading-relaxed text-primary-200">
+                    <p className="font-medium text-primary-100">Built for the CPUT community</p>
+                    <p className="mt-1">Cape Peninsula University of Technology &middot; Work Integrated Learning</p>
+                </div>
             </div>
             <div className="flex items-center justify-center p-4 sm:p-8">{children}</div>
         </div>
