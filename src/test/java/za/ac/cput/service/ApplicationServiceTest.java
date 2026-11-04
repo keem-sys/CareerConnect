@@ -7,9 +7,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import za.ac.cput.domain.Application;
+import za.ac.cput.domain.ApplicationStatus;
 import za.ac.cput.domain.Internship;
 import za.ac.cput.domain.Student;
 import za.ac.cput.repository.ApplicationRepository;
+import za.ac.cput.repository.CompanyRepository;
 import za.ac.cput.repository.InternshipRepository;
 import za.ac.cput.repository.StudentRepository;
 
@@ -32,6 +34,8 @@ class ApplicationServiceTest {
     private StudentRepository studentRepository;
     @Mock
     private InternshipRepository internshipRepository;
+    @Mock
+    private CompanyRepository companyRepository;
 
     @InjectMocks
     private ApplicationService applicationService;
@@ -60,7 +64,7 @@ class ApplicationServiceTest {
 
         existingApplication = new Application.Builder()
                 .setApplicationId("APP-001")
-                .setStatus("Pending")
+                .setStatus(ApplicationStatus.PENDING)
                 .setStudent(student)
                 .setInternship(futureInternship)
                 .build();
@@ -81,7 +85,7 @@ class ApplicationServiceTest {
         );
 
         assertNotNull(result);
-        assertEquals("Pending", result.getStatus());
+        assertEquals(ApplicationStatus.PENDING, result.getStatus());
         verify(repository, times(1)).save(any(Application.class));
     }
 
@@ -182,12 +186,12 @@ class ApplicationServiceTest {
 
     @Test
     void readByStatus_ShouldReturnApplicationsWithThatStatus() {
-        when(repository.findByStatus("Pending")).thenReturn(List.of(existingApplication));
+        when(repository.findByStatus(ApplicationStatus.PENDING)).thenReturn(List.of(existingApplication));
 
-        List<Application> result = applicationService.readByStatus("Pending");
+        List<Application> result = applicationService.readByStatus(ApplicationStatus.PENDING);
 
         assertEquals(1, result.size());
-        assertEquals("Pending", result.get(0).getStatus());
+        assertEquals(ApplicationStatus.PENDING, result.get(0).getStatus());
     }
 
 
@@ -196,9 +200,9 @@ class ApplicationServiceTest {
         when(repository.findById("APP-001")).thenReturn(Optional.of(existingApplication));
         when(repository.save(any(Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Application result = applicationService.updateStatus("APP-001", "Accepted");
+        Application result = applicationService.updateStatus("APP-001", ApplicationStatus.ACCEPTED);
 
-        assertEquals("Accepted", result.getStatus());
+        assertEquals(ApplicationStatus.ACCEPTED, result.getStatus());
         verify(repository, times(1)).save(any(Application.class));
     }
 
@@ -208,7 +212,7 @@ class ApplicationServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> applicationService.updateStatus("APP-999", "Accepted")
+                () -> applicationService.updateStatus("APP-999", ApplicationStatus.ACCEPTED)
         );
 
         assertEquals("Application not found", exception.getMessage());
@@ -235,5 +239,61 @@ class ApplicationServiceTest {
 
         assertEquals("Application not found", exception.getMessage());
         verify(repository, never()).deleteById(anyString());
+    }
+
+    @Test
+    void updateStatus_ShouldRejectBackwardsTransition() {
+        Application accepted = new Application.Builder().copy(existingApplication)
+                .setStatus(ApplicationStatus.ACCEPTED).build();
+        when(repository.findById("APP-001")).thenReturn(Optional.of(accepted));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> applicationService.updateStatus("APP-001", ApplicationStatus.PENDING));
+        verify(repository, never()).save(any(Application.class));
+    }
+
+    @Test
+    void updateStatus_ShouldNotLetEmployerWithdraw() {
+        when(repository.findById("APP-001")).thenReturn(Optional.of(existingApplication));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> applicationService.updateStatus("APP-001", ApplicationStatus.WITHDRAWN));
+        verify(repository, never()).save(any(Application.class));
+    }
+
+    @Test
+    void withdraw_ShouldMarkApplicationWithdrawn() {
+        when(repository.findById("APP-001")).thenReturn(Optional.of(existingApplication));
+        when(repository.save(any(Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Application result = applicationService.withdraw("APP-001");
+
+        assertEquals(ApplicationStatus.WITHDRAWN, result.getStatus());
+        assertNotNull(result.getUpdatedAt());
+    }
+
+    @Test
+    void apply_ShouldStoreCoverLetter() {
+        when(studentRepository.findById(student.getStudentNumber())).thenReturn(Optional.of(student));
+        when(internshipRepository.findById(futureInternship.getInternshipId())).thenReturn(Optional.of(futureInternship));
+        when(repository.existsByStudent_StudentNumberAndInternship_InternshipId(anyString(), anyString())).thenReturn(false);
+        when(repository.save(any(Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Application result = applicationService.apply(student.getStudentNumber(),
+                futureInternship.getInternshipId(), "I am keen to learn.");
+
+        assertEquals("I am keen to learn.", result.getCoverLetter());
+        assertEquals(ApplicationStatus.PENDING, result.getStatus());
+    }
+
+    @Test
+    void toResponses_ShouldNotExposeStudentPassword() {
+        Student withPassword = new Student.Builder().copy(student).setName("Thabo").setPassword("$2a$hash").build();
+        Application app = new Application.Builder().copy(existingApplication).setStudent(withPassword).build();
+
+        var responses = applicationService.toResponses(List.of(app));
+
+        assertEquals("Thabo", responses.get(0).student().name());
+        assertFalse(responses.get(0).toString().contains("$2a$hash"));
     }
 }

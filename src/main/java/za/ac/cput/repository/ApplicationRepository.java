@@ -10,6 +10,7 @@ package za.ac.cput.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import za.ac.cput.domain.Application;
+import za.ac.cput.domain.ApplicationStatus;
 
 import java.util.List;
 
@@ -17,7 +18,8 @@ import java.util.List;
 public interface ApplicationRepository extends JpaRepository<Application, String> {
     List<Application> findByStudent_StudentNumber(String studentNumber);
     List<Application> findByInternship_InternshipId(String internshipId);
-    List<Application> findByStatus(String status);
+    List<Application> findByStatus(ApplicationStatus status);
     boolean existsByStudent_StudentNumberAndInternship_InternshipId(String studentNumber, String internshipId);
     List<Application> findByInternship_CompanyId(String companyId);
+    long countByInternship_InternshipId(String internshipId);
 }

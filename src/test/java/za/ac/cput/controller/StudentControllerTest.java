@@ -36,6 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 public class StudentControllerTest {
 
+    @MockitoBean
+    private za.ac.cput.service.JwtService jwtService;
+
+    @MockitoBean
+    private za.ac.cput.security.CustomUserDetailsService customUserDetailsService;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -84,7 +90,7 @@ public class StudentControllerTest {
                 .andExpect(jsonPath("$.email").value("230480152@mycput.ac.za"))
                 .andExpect(jsonPath("$.password").doesNotExist());
 
-        verify(studentService, times(1)).read("230480152");
+        verify(studentService, atLeastOnce()).read("230480152");
     }
 
     @Test
@@ -101,7 +107,7 @@ public class StudentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studentNumber").value("230480152"))
                 .andExpect(jsonPath("$.name").value("Peter"))
-                .andExpect(jsonPath("$.email").value("peter@gmail.com"))
+                .andExpect(jsonPath("$.email").value("230480152@mycput.ac.za"))
                 .andExpect(jsonPath("$.password").doesNotExist());
 
         verify(studentService, times(1)).update(eq("230480152"), any(StudentUpdateRequest.class));

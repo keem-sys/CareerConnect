@@ -63,6 +63,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/company/create").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/internship/getAll").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/internship/read/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/internship/details/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/internship/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/stats/public").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/company/getAll").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/company/read/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/company/getByName").permitAll()
@@ -82,6 +85,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/profile/**").hasAnyRole("STUDENT", "COMPANY", "ADMIN")
                         .requestMatchers("/api/company/**").hasAnyRole("COMPANY", "ADMIN")
                         .requestMatchers("/api/internship/**").hasAnyRole("STUDENT", "COMPANY", "ADMIN")
+                        .requestMatchers("/api/stats/**").hasAnyRole("STUDENT", "COMPANY", "ADMIN")
 
                         .anyRequest().denyAll()
                 )

@@ -7,7 +7,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import za.ac.cput.domain.Application;
+import za.ac.cput.domain.ApplicationStatus;
 import za.ac.cput.domain.Company;
+import za.ac.cput.dto.response.ApplicationResponse;
 import za.ac.cput.repository.CompanyRepository;
 import za.ac.cput.service.ApplicationService;
 
@@ -28,7 +30,11 @@ public class ApplicationController {
         this.companyRepository = companyRepository;
     }
 
-    public record ApplicationRequest(String studentNumber, String internshipId) {}
+    public record ApplicationRequest(String studentNumber, String internshipId, String coverLetter) {
+        public ApplicationRequest(String studentNumber, String internshipId) {
+            this(studentNumber, internshipId, null);
+        }
+    }
 
     @PostMapping("/create")
     @PreAuthorize("hasRole('STUDENT')")
@@ -38,9 +44,10 @@ public class ApplicationController {
         try {
             Application created = applicationService.apply(
                     request.studentNumber(),
-                    request.internshipId()
+                    request.internshipId(),
+                    request.coverLetter()
             );
-            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+            return ResponseEntity.status(HttpStatus.CREATED).body(applicationService.toResponse(created));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
@@ -48,20 +55,18 @@ public class ApplicationController {
 
     @GetMapping("/read/{applicationId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'COMPANY', 'ADMIN')")
-    public ResponseEntity<Application> read(@PathVariable String applicationId,
-                                            Authentication authentication) {
+    public ResponseEntity<ApplicationResponse> read(@PathVariable String applicationId,
+                                                    Authentication authentication) {
         Optional<Application> application = applicationService.read(applicationId);
 
         if (application.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
-        // Student owner check
         if (isStudent(authentication) && !application.get().getStudent().getEmail().equalsIgnoreCase(authentication.getName())) {
             throw new AccessDeniedException("Access Denied: You may only view your own applications.");
         }
 
-        // Company owner check
         if (isCompany(authentication)) {
             String companyId = getAuthenticatedCompanyId(authentication);
             if (!application.get().getInternship().getCompanyId().equals(companyId)) {
@@ -69,7 +74,7 @@ public class ApplicationController {
             }
         }
 
-        return ResponseEntity.ok(application.get());
+        return ResponseEntity.ok(applicationService.toResponse(application.get()));
     }
 
     @PutMapping("/update/{applicationId}")
@@ -77,8 +82,7 @@ public class ApplicationController {
     public ResponseEntity<?> updateStatus(@PathVariable String applicationId,
                                           @RequestParam String status,
                                           Authentication authentication) {
-        Application existing = applicationService.read(applicationId)
-                .orElse(null);
+        Application existing = applicationService.read(applicationId).orElse(null);
 
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Application not found");
@@ -92,8 +96,23 @@ public class ApplicationController {
         }
 
         try {
-            Application updated = applicationService.updateStatus(applicationId, status);
-            return ResponseEntity.ok(updated);
+            Application updated = applicationService.updateStatus(applicationId, ApplicationStatus.fromString(status));
+            return ResponseEntity.ok(applicationService.toResponse(updated));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @PutMapping("/withdraw/{applicationId}")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<?> withdraw(@PathVariable String applicationId, Authentication authentication) {
+        Application existing = applicationService.read(applicationId).orElse(null);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Application not found");
+        }
+        requireStudentOwner(existing.getStudent().getStudentNumber(), authentication);
+        try {
+            return ResponseEntity.ok(applicationService.toResponse(applicationService.withdraw(applicationId)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
@@ -112,35 +131,54 @@ public class ApplicationController {
 
     @GetMapping("/getAll")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<Application>> getAll() {
-        return ResponseEntity.ok(applicationService.readAll());
+    public ResponseEntity<List<ApplicationResponse>> getAll() {
+        return ResponseEntity.ok(applicationService.toResponses(applicationService.readAll()));
     }
 
     @GetMapping("/student/{studentId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
-    public ResponseEntity<List<Application>> getByStudent(@PathVariable String studentId,
-                                                          Authentication authentication) {
+    public ResponseEntity<List<ApplicationResponse>> getByStudent(@PathVariable String studentId,
+                                                                  Authentication authentication) {
         requireStudentOwner(studentId, authentication);
-        return ResponseEntity.ok(applicationService.readByStudent(studentId));
+        return ResponseEntity.ok(applicationService.toResponses(applicationService.readByStudent(studentId)));
     }
 
     @GetMapping("/company/{companyId}")
     @PreAuthorize("hasAnyRole('COMPANY', 'ADMIN')")
-    public ResponseEntity<List<Application>> getByCompany(@PathVariable String companyId,
-                                                          Authentication authentication) {
+    public ResponseEntity<List<ApplicationResponse>> getByCompany(@PathVariable String companyId,
+                                                                  Authentication authentication) {
         if (isCompany(authentication)) {
             String authCompanyId = getAuthenticatedCompanyId(authentication);
             if (!authCompanyId.equals(companyId)) {
                 throw new AccessDeniedException("Access Denied: You cannot view applicants belonging to another company.");
             }
         }
-        return ResponseEntity.ok(applicationService.readByCompany(companyId));
+        return ResponseEntity.ok(applicationService.toResponses(applicationService.readByCompany(companyId)));
+    }
+
+    @GetMapping("/internship/{internshipId}")
+    @PreAuthorize("hasAnyRole('COMPANY', 'ADMIN')")
+    public ResponseEntity<List<ApplicationResponse>> getByInternship(@PathVariable String internshipId,
+                                                                     Authentication authentication) {
+        List<Application> applications = applicationService.readByInternship(internshipId);
+        if (isCompany(authentication)) {
+            String companyId = getAuthenticatedCompanyId(authentication);
+            applications = applications.stream()
+                    .filter(a -> companyId.equals(a.getInternship().getCompanyId()))
+                    .toList();
+        }
+        return ResponseEntity.ok(applicationService.toResponses(applications));
     }
 
     @GetMapping("/status/{status}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<Application>> getByStatus(@PathVariable String status) {
-        return ResponseEntity.ok(applicationService.readByStatus(status));
+    public ResponseEntity<?> getByStatus(@PathVariable String status) {
+        try {
+            ApplicationStatus parsed = ApplicationStatus.fromString(status);
+            return ResponseEntity.ok(applicationService.toResponses(applicationService.readByStatus(parsed)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     private void requireStudentOwner(String studentNumber, Authentication authentication) {
@@ -155,18 +193,20 @@ public class ApplicationController {
                 .orElseThrow(() -> new AccessDeniedException("Authenticated company record not found."));
     }
 
+    private static boolean hasRole(Authentication authentication, String role) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> Objects.equals(a.getAuthority(), role));
+    }
+
     private boolean isAdmin(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN"));
+        return hasRole(authentication, "ROLE_ADMIN");
     }
 
     private boolean isStudent(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_STUDENT"));
+        return hasRole(authentication, "ROLE_STUDENT");
     }
 
     private boolean isCompany(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_COMPANY"));
+        return hasRole(authentication, "ROLE_COMPANY");
     }
 }
