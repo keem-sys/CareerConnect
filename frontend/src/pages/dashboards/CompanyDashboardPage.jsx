@@ -1,105 +1,204 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, Building2, Users, TrendingUp, PlusCircle, Loader2 } from 'lucide-react';
-import { useAuth } from "../../context/AuthContext.jsx";
-import { getInternshipsByCompany } from '../../services/internshipService';
+import { Briefcase, CheckCircle2, Clock, PlusCircle, Users } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { getCompanyStats } from '../../services/statsService';
 import { getCompanyApplications } from '../../services/applicationService';
+import {
+    Alert, Avatar, Badge, Button, Card, CardHeader, EmptyState, PageContainer, PageHeader,
+    Skeleton, StatCard, StatusBadge, Table, cx,
+} from '../../components/ui';
+import { STATUS_META, errorMessage, formatDate, timeAgo } from '../../lib/format';
+
+const PIPELINE = [
+    { status: 'PENDING', bar: 'bg-slate-400' },
+    { status: 'UNDER_REVIEW', bar: 'bg-primary-500' },
+    { status: 'SHORTLISTED', bar: 'bg-violet-500' },
+    { status: 'ACCEPTED', bar: 'bg-emerald-500' },
+    { status: 'REJECTED', bar: 'bg-rose-400' },
+];
+
+function HiringPipeline({ byStatus = {} }) {
+    const counts = PIPELINE.map((p) => ({ ...p, count: byStatus[p.status] ?? 0 }));
+    const total = counts.reduce((sum, c) => sum + c.count, 0);
+
+    return (
+        <Card>
+            <CardHeader title="Hiring pipeline" subtitle="Where your applicants currently stand" />
+            {total === 0 ? (
+                <p className="text-sm text-text-muted">No applications yet. They will appear here as students apply.</p>
+            ) : (
+                <>
+                    <div className="flex h-3 w-full rounded-full overflow-hidden bg-slate-100" aria-hidden="true">
+                        {counts.filter((c) => c.count > 0).map((c) => (
+                            <div key={c.status} className={c.bar} style={{ width: `${(c.count / total) * 100}%` }} />
+                        ))}
+                    </div>
+                    <ul className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-3">
+                        {counts.map((c) => (
+                            <li key={c.status} className="rounded-lg border border-ui-border px-3 py-2.5">
+                                <div className="flex items-center gap-2 text-sm text-text-muted">
+                                    <span className={cx('w-2.5 h-2.5 rounded-full', c.bar)} />
+                                    {STATUS_META[c.status].label}
+                                </div>
+                                <p className="text-xl font-bold mt-1">{c.count}</p>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
+        </Card>
+    );
+}
 
 export default function CompanyDashboardPage() {
     const { user } = useAuth();
-    const [myPostingsCount, setMyPostingsCount] = useState(0);
-    const [applicantCount, setApplicantCount] = useState(0);
+    const companyId = user?.companyId ?? user?.id;
+
+    const [stats, setStats] = useState(null);
+    const [recent, setRecent] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
-        const fetchCompanyStats = async () => {
-            const companyId = user?.companyId;
+        if (!companyId) return undefined;
+        let cancelled = false;
+        Promise.all([getCompanyStats(companyId), getCompanyApplications(companyId)])
+            .then(([s, apps]) => {
+                if (cancelled) return;
+                setStats(s);
+                const list = Array.isArray(apps) ? [...apps] : [];
+                list.sort((a, b) => new Date(b.dateApplied ?? 0) - new Date(a.dateApplied ?? 0));
+                setRecent(list.slice(0, 5));
+            })
+            .catch((err) => { if (!cancelled) setError(errorMessage(err, 'Could not load your dashboard.')); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [companyId, reloadKey]);
 
-            if (!companyId) {
-                console.warn("Company Dashboard: No company ID found on user object:", user);
-                setLoading(false);
-                return;
-            }
+    const retry = () => {
+        setLoading(true);
+        setError('');
+        setReloadKey((k) => k + 1);
+    };
 
-            try {
-                const postings = await getInternshipsByCompany(companyId);
-                setMyPostingsCount(Array.isArray(postings) ? postings.length : 0);
+    const postings = stats?.postings ?? [];
+    const isNew = !loading && !error && stats && (stats.totalPostings ?? postings.length) === 0;
 
-                const applicants = await getCompanyApplications(companyId);
-                setApplicantCount(Array.isArray(applicants) ? applicants.length : 0);
-            } catch (err) {
-                console.error("Failed to load company metrics", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchCompanyStats();
-    }, [user]);
+    const columns = [
+        {
+            key: 'title',
+            header: 'Posting',
+            render: (p) => <Link to={`/internships/${p.internshipId}`} className="font-medium text-text-main hover:text-primary-700">{p.title}</Link>,
+        },
+        { key: 'open', header: 'Status', render: (p) => <Badge tone={p.open ? 'success' : 'muted'}>{p.open ? 'Open' : 'Closed'}</Badge> },
+        { key: 'deadline', header: 'Deadline', className: 'hidden md:table-cell whitespace-nowrap', render: (p) => formatDate(p.deadline) },
+        { key: 'applicants', header: 'Applicants', className: 'text-right', render: (p) => p.applicants ?? 0 },
+        {
+            key: 'pendingReview',
+            header: 'To review',
+            className: 'text-right hidden sm:table-cell',
+            render: (p) => (p.pendingReview ? <Badge tone="warning">{p.pendingReview}</Badge> : <span className="text-text-subtle">0</span>),
+        },
+        {
+            key: 'action',
+            header: '',
+            className: 'text-right',
+            render: (p) => <Button size="sm" variant="secondary" to={`/company/applicants?internship=${p.internshipId}`}>Review</Button>,
+        },
+    ];
 
     return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
-            <div className="bg-card-bg border border-ui-border rounded-3xl p-8 shadow-xl relative overflow-hidden">
-                <div className="space-y-2">
-                    <div className="inline-flex items-center space-x-2 bg-brand-primary/10 border border-brand-accent/30 px-3 py-1 rounded-full text-brand-accent text-xs font-mono font-semibold">
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>EMPLOYER PORTAL</span>
-                    </div>
-                    <h1 className="font-heading text-3xl sm:text-4xl font-extrabold text-text-main">
-                        Welcome, {user?.name}! 🏢
-                    </h1>
-                    <p className="text-text-muted text-xs sm:text-sm max-w-2xl">
-                        Manage your internship opportunities, review incoming student applications, and recruit top emerging talent.
-                    </p>
-                </div>
-            </div>
+        <PageContainer>
+            <PageHeader
+                title={`Welcome back, ${user?.name || 'there'}`}
+                subtitle="Here is how your internship listings are performing."
+                actions={<Button icon={PlusCircle} to="/internships/new">Post internship</Button>}
+            />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-card-bg border border-ui-border p-6 rounded-2xl shadow-sm flex items-center space-x-4">
-                    <div className="p-3.5 bg-brand-primary/10 text-brand-accent border border-brand-accent/20 rounded-xl">
-                        <Briefcase className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-text-muted text-xs font-semibold uppercase tracking-wider">Active Postings</p>
-                        <h3 className="font-heading text-2xl font-bold text-text-main mt-0.5">
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin inline text-brand-accent" /> : `${myPostingsCount} Listings`}
-                        </h3>
-                    </div>
-                </div>
+            {error && (
+                <Alert className="mb-6" title="Something went wrong">
+                    {error} <button onClick={retry} className="underline font-medium cursor-pointer">Try again</button>
+                </Alert>
+            )}
 
-                <div className="bg-card-bg border border-ui-border p-6 rounded-2xl shadow-sm flex items-center space-x-4">
-                    <div className="p-3.5 bg-emerald-50 text-brand-mint border border-emerald-200 rounded-xl">
-                        <Users className="w-6 h-6" />
+            {isNew ? (
+                <Card>
+                    <EmptyState
+                        icon={Briefcase}
+                        title="Post your first internship"
+                        description="Publish a listing to start receiving applications from CPUT students. It only takes a few minutes."
+                        action={<Button icon={PlusCircle} to="/internships/new">Post an internship</Button>}
+                    />
+                </Card>
+            ) : (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <StatCard label="Active postings" value={stats?.activePostings ?? 0} icon={Briefcase} hint={stats ? `${stats.totalPostings ?? 0} total` : undefined} loading={loading} />
+                        <StatCard label="Total applicants" value={stats?.totalApplicants ?? 0} icon={Users} tone="purple" loading={loading} />
+                        <StatCard label="Awaiting review" value={stats?.awaitingReview ?? 0} icon={Clock} tone="warning" loading={loading} />
+                        <StatCard label="Hired" value={stats?.hired ?? 0} icon={CheckCircle2} tone="success" loading={loading} />
                     </div>
-                    <div>
-                        <p className="text-text-muted text-xs font-semibold uppercase tracking-wider">Total Applicants</p>
-                        <h3 className="font-heading text-2xl font-bold text-text-main mt-0.5">
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin inline text-brand-mint" /> : `${applicantCount} Candidates`}
-                        </h3>
-                    </div>
-                </div>
 
-                <div className="bg-card-bg border border-ui-border p-6 rounded-2xl shadow-sm flex items-center space-x-4">
-                    <div className="p-3.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl">
-                        <TrendingUp className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-text-muted text-xs font-semibold uppercase tracking-wider">Account Status</p>
-                        <h3 className="font-heading text-2xl font-bold text-text-main mt-0.5">Verified Partner</h3>
-                    </div>
-                </div>
-            </div>
+                    {loading ? (
+                        <Card><Skeleton className="h-5 w-40 mb-4" /><Skeleton className="h-3 w-full" /></Card>
+                    ) : stats && <HiringPipeline byStatus={stats.byStatus} />}
 
-            <div className="bg-card-bg border border-ui-border p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div>
-                    <h3 className="font-heading text-xl font-bold text-text-main mb-1">Post a New Internship Position</h3>
-                    <p className="text-text-muted text-xs max-w-xl">Create a new internship listing to start receiving applications from qualified software development students.</p>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                        <Card padding={false} className="lg:col-span-2">
+                            <div className="px-5 sm:px-6 pt-5 sm:pt-6">
+                                <CardHeader
+                                    title="Your postings"
+                                    subtitle="Applicants and outstanding reviews per listing"
+                                    action={<Link to="/company/postings" className="text-sm font-medium text-primary-700 hover:underline">Manage</Link>}
+                                />
+                            </div>
+                            {loading ? (
+                                <div className="px-6 pb-6 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                            ) : (
+                                <Table
+                                    columns={columns}
+                                    rows={postings}
+                                    rowKey={(p) => p.internshipId}
+                                    empty={<EmptyState icon={Briefcase} title="No postings yet" />}
+                                />
+                            )}
+                        </Card>
+
+                        <Card>
+                            <CardHeader
+                                title="Recent applicants"
+                                action={<Link to="/company/applicants" className="text-sm font-medium text-primary-700 hover:underline">View all</Link>}
+                            />
+                            {loading ? (
+                                <div className="space-y-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                            ) : recent.length === 0 ? (
+                                <EmptyState icon={Users} title="No applicants yet" description="New applications will show up here." className="py-6" />
+                            ) : (
+                                <ul className="divide-y divide-ui-border -my-2">
+                                    {recent.map((a) => (
+                                        <li key={a.applicationId}>
+                                            <Link
+                                                to={`/company/applicants?internship=${a.internship?.internshipId ?? ''}`}
+                                                className="flex items-center gap-3 py-3 rounded-lg hover:bg-slate-50 -mx-2 px-2"
+                                            >
+                                                <Avatar name={a.student?.name} size="sm" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium truncate">{a.student?.name ?? 'Student'}</p>
+                                                    <p className="text-xs text-text-muted truncate">{a.internship?.title} · {timeAgo(a.dateApplied)}</p>
+                                                </div>
+                                                <StatusBadge status={a.status} />
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </Card>
+                    </div>
                 </div>
-                <Link to="/internships/new" className="px-6 py-3 bg-brand-primary hover:bg-brand-primary-hover text-white font-semibold rounded-xl text-xs shadow-lg shadow-brand-primary/20 shrink-0 flex items-center space-x-2">
-                    <PlusCircle className="w-4 h-4" />
-                    <span>Post Internship</span>
-                </Link>
-            </div>
-        </div>
+            )}
+        </PageContainer>
     );
 }

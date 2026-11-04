@@ -1,263 +1,349 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, User, Link as LinkIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Mail, Hash, Link as LinkIcon, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/Toast';
 import { createProfile, updateProfile, getProfileByStudentNumber } from '../services/profileService';
+import { readStudent, updateStudent } from '../services/studentService';
+import {
+    PageContainer, PageHeader, Card, CardHeader, Button, Field, Input, Textarea, Avatar, ProgressBar,
+    Skeleton, Alert, Badge,
+} from '../components/ui';
+import { errorMessage } from '../lib/format';
+
+const BIO_MAX = 255;
+const SKILL_MAX = 40;
+const SKILLS_LIMIT = 20;
+
+const isValidUrl = (value) => {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
+};
+
+async function loadProfile(studentNumber) {
+    try {
+        return (await getProfileByStudentNumber(studentNumber)) || null;
+    } catch (err) {
+        if (err.response?.status === 404) return null;
+        throw err;
+    }
+}
+
+function validateProfile({ bio, skills, resumeLink }) {
+    const errors = {};
+    if (!bio.trim()) errors.bio = 'Tell employers a little about yourself.';
+    else if (bio.length > BIO_MAX) errors.bio = `Keep your bio under ${BIO_MAX} characters.`;
+    if (skills.length === 0) errors.skills = 'Add at least one skill.';
+    if (!resumeLink.trim()) errors.resumeLink = 'Add a link to your CV or LinkedIn profile.';
+    else if (!isValidUrl(resumeLink.trim())) errors.resumeLink = 'Enter a valid link starting with https://';
+    return errors;
+}
 
 export default function ProfilePage() {
-    const { user } = useAuth();
+    const { user, login } = useAuth();
+    const { toast } = useToast();
+    const studentNumber = user?.id;
+
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
+
+    const [account, setAccount] = useState({ name: user?.name ?? '', email: user?.email ?? '' });
+    const [name, setName] = useState(user?.name ?? '');
+    const [nameError, setNameError] = useState(null);
+    const [savingAccount, setSavingAccount] = useState(false);
 
     const [profileId, setProfileId] = useState(null);
     const [bio, setBio] = useState('');
     const [skills, setSkills] = useState([]);
     const [skillInput, setSkillInput] = useState('');
     const [resumeLink, setResumeLink] = useState('');
+    const [errors, setErrors] = useState({});
+    const [savingProfile, setSavingProfile] = useState(false);
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [message, setMessage] = useState(null);
-
-    // On page load, check if this student already has a saved profile in MySQL.
     useEffect(() => {
-        const loadExistingProfile = async () => {
-            if (!user?.studentNumber) {
-                setLoading(false);
-                return;
-            }
-            try {
-                const existing = await getProfileByStudentNumber(user.studentNumber);
-                if (existing) {
-                    setProfileId(existing.profileId);
-                    setBio(existing.bio || '');
-                    setSkills(existing.skills || []);
-                    setResumeLink(existing.resumeLink || '');
+        if (!studentNumber) return undefined;
+        let cancelled = false;
+        Promise.all([readStudent(studentNumber).catch(() => null), loadProfile(studentNumber)])
+            .then(([student, profile]) => {
+                if (cancelled) return;
+                if (student) {
+                    setAccount({ name: student.name ?? '', email: student.email ?? '' });
+                    setName(student.name ?? '');
                 }
-            } catch (err) {
-                // No existing profile for this student yet - show blank form.
-            } finally {
-                setLoading(false);
-            }
-        };
+                if (profile) {
+                    setProfileId(profile.profileId);
+                    setBio(profile.bio ?? '');
+                    setSkills(profile.skills ?? []);
+                    setResumeLink(profile.resumeLink ?? '');
+                }
+            })
+            .catch((err) => { if (!cancelled) setLoadError(errorMessage(err, 'Could not load your profile.')); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [studentNumber]);
 
-        loadExistingProfile();
-    }, [user]);
+    const completedItems = [Boolean(bio.trim()), skills.length > 0, Boolean(resumeLink.trim())];
+    const completeness = Math.round((completedItems.filter(Boolean).length / completedItems.length) * 100);
 
     const addSkill = () => {
-        const trimmed = skillInput.trim();
-        if (trimmed && !skills.includes(trimmed)) {
-            setSkills([...skills, trimmed]);
+        const value = skillInput.trim().replace(/,$/, '');
+        if (!value) return;
+        if (value.length > SKILL_MAX) {
+            setErrors((e) => ({ ...e, skills: `Skills must be ${SKILL_MAX} characters or fewer.` }));
+            return;
+        }
+        if (skills.length >= SKILLS_LIMIT) {
+            setErrors((e) => ({ ...e, skills: `You can add up to ${SKILLS_LIMIT} skills.` }));
+            return;
+        }
+        if (!skills.some((s) => s.toLowerCase() === value.toLowerCase())) {
+            setSkills((list) => [...list, value]);
         }
         setSkillInput('');
+        setErrors((e) => ({ ...e, skills: undefined }));
     };
 
-    const handleSkillKeyDown = (e) => {
+    const onSkillKeyDown = (e) => {
         if (e.key === 'Enter' || e.key === ',') {
             e.preventDefault();
             addSkill();
+        } else if (e.key === 'Backspace' && !skillInput && skills.length > 0) {
+            setSkills((list) => list.slice(0, -1));
         }
     };
 
-    const removeSkill = (skillToRemove) => {
-        setSkills(skills.filter((s) => s !== skillToRemove));
-    };
+    const removeSkill = (skill) => setSkills((list) => list.filter((s) => s !== skill));
 
-    const handleSave = async (e) => {
+    const saveProfile = async (e) => {
         e.preventDefault();
-        setMessage(null);
+        const pending = skillInput.trim();
+        const allSkills = pending && !skills.some((s) => s.toLowerCase() === pending.toLowerCase())
+            ? [...skills, pending]
+            : skills;
+        const data = { bio: bio.trim(), skills: allSkills, resumeLink: resumeLink.trim() };
+        const found = validateProfile(data);
+        setErrors(found);
+        if (Object.keys(found).length > 0) return;
+        setSkills(allSkills);
+        setSkillInput('');
 
-        if (!bio.trim() || skills.length === 0 || !resumeLink.trim()) {
-            setMessage({ type: 'error', text: 'Bio, at least one skill, and a resume/CV link are required.' });
-            return;
-        }
-
-        if (!user?.studentNumber) {
-            setMessage({ type: 'error', text: 'You must be logged in as a student to save a profile.' });
-            return;
-        }
-
-        setSaving(true);
+        setSavingProfile(true);
         try {
             if (profileId) {
-                // Existing profile -> update it
-                const payload = { profileId, studentNumber: user.studentNumber, bio, skills, resumeLink };
-                await updateProfile(payload);
-                setMessage({ type: 'success', text: 'Profile updated successfully!' });
+                await updateProfile({ profileId, studentNumber, ...data });
+                toast('Profile updated', 'success');
             } else {
-                // No existing profile -> create a new one
-                const payload = { studentNumber: user.studentNumber, bio, skills, resumeLink };
-                const saved = await createProfile(payload);
+                const saved = await createProfile({ studentNumber, ...data });
+                if (!saved?.profileId) throw new Error('The profile could not be created. Please check your details.');
                 setProfileId(saved.profileId);
-                setMessage({ type: 'success', text: 'Profile saved successfully!' });
+                toast('Profile created', 'success');
             }
         } catch (err) {
-            setMessage({ type: 'error', text: 'Failed to save profile. Please try again.' });
+            toast(errorMessage(err, 'Could not save your profile.'), 'error');
         } finally {
-            setSaving(false);
+            setSavingProfile(false);
+        }
+    };
+
+    const saveAccount = async (e) => {
+        e.preventDefault();
+        const trimmed = name.trim();
+        if (trimmed.length < 2) {
+            setNameError('Enter your full name.');
+            return;
+        }
+        setNameError(null);
+        setSavingAccount(true);
+        try {
+            const updated = await updateStudent({ studentNumber, name: trimmed, email: account.email });
+            const newName = updated?.name ?? trimmed;
+            setAccount((a) => ({ ...a, name: newName }));
+            setName(newName);
+            login({ ...user, name: newName });
+            toast('Account details updated', 'success');
+        } catch (err) {
+            toast(errorMessage(err, 'Could not update your account.'), 'error');
+        } finally {
+            setSavingAccount(false);
         }
     };
 
     if (loading) {
         return (
-            <div className="max-w-4xl mx-auto px-4 py-10 text-center text-text-muted">
-                Loading your profile...
-            </div>
+            <PageContainer className="max-w-5xl">
+                <Skeleton className="h-8 w-48 mb-2" />
+                <Skeleton className="h-5 w-72 mb-6" />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Skeleton className="h-64 w-full rounded-xl" />
+                    <Skeleton className="h-96 w-full rounded-xl lg:col-span-2" />
+                </div>
+            </PageContainer>
         );
     }
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-10 grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* LEFT COLUMN: Profile Form */}
-            <div className="bg-card-bg border border-ui-border rounded-2xl shadow-sm p-6">
-                <h1 className="font-heading text-2xl font-bold text-text-main mb-1">
-                    {profileId ? 'Edit Your Profile' : 'Build Your Profile'}
-                </h1>
-                <p className="text-text-muted text-sm mb-6">
-                    Add your bio, skills, and CV link so tech employers can discover you.
-                </p>
+        <PageContainer className="max-w-5xl">
+            <PageHeader title="My profile" subtitle="This is what employers see when you apply for an internship." />
 
-                <form onSubmit={handleSave} className="space-y-5">
-                    <div>
-                        <label className="block text-sm font-medium text-text-main mb-1">
-                            Bio
-                        </label>
-                        <textarea
-                            value={bio}
-                            onChange={(e) => setBio(e.target.value)}
-                            rows={4}
-                            placeholder="Tell companies a bit about your academic background and interests..."
-                            className="w-full rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                        />
-                    </div>
+            {loadError && <Alert className="mb-6">{loadError}</Alert>}
 
-                    <div>
-                        <label className="block text-sm font-medium text-text-main mb-1">
-                            Skills
-                        </label>
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={skillInput}
-                                onChange={(e) => setSkillInput(e.target.value)}
-                                onKeyDown={handleSkillKeyDown}
-                                placeholder="e.g. Java, Spring Boot, React (Press Enter)"
-                                className="flex-1 rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                            />
-                            <button
-                                type="button"
-                                onClick={addSkill}
-                                className="flex items-center justify-center rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white px-3 transition-colors cursor-pointer"
-                            >
-                                <Plus size={18} />
-                            </button>
-                        </div>
-
-                        {skills.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                                {skills.map((skill) => (
-                                    <span
-                                        key={skill}
-                                        className="flex items-center gap-1 bg-emerald-50 text-brand-mint border border-emerald-200 rounded-xl px-3 py-1 text-sm font-mono"
-                                    >
-                                        {skill}
-                                        <button
-                                            type="button"
-                                            onClick={() => removeSkill(skill)}
-                                            className="hover:text-rose-600 cursor-pointer"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </span>
-                                ))}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <div className="space-y-6">
+                    <Card>
+                        <div className="flex flex-col items-center text-center">
+                            <Avatar name={account.name} size="lg" />
+                            <h2 className="mt-3 text-lg font-semibold">{account.name || 'Student'}</h2>
+                            <div className="mt-2 space-y-1 text-sm text-text-muted">
+                                <p className="flex items-center justify-center gap-1.5"><Mail className="w-4 h-4" />{account.email}</p>
+                                <p className="flex items-center justify-center gap-1.5"><Hash className="w-4 h-4" />{studentNumber}</p>
                             </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-text-main mb-1">
-                            CV / Resume Document Link
-                        </label>
-                        <input
-                            type="url"
-                            value={resumeLink}
-                            onChange={(e) => setResumeLink(e.target.value)}
-                            placeholder="https://drive.google.com/... or link to your PDF"
-                            className="w-full rounded-xl border border-ui-border bg-app-bg px-3 py-2 text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-accent font-mono text-xs"
-                        />
-                    </div>
-
-                    {message && (
-                        <div
-                            className={
-                                message.type === 'success'
-                                    ? 'bg-emerald-50 text-brand-mint border border-emerald-200 rounded-xl px-3 py-2 text-sm'
-                                    : 'text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 text-sm'
-                            }
-                        >
-                            {message.text}
                         </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white font-medium rounded-xl py-2.5 transition-colors disabled:opacity-60 cursor-pointer shadow-sm"
-                    >
-                        {saving ? 'Saving...' : profileId ? 'Update Profile' : 'Save Profile'}
-                    </button>
-                </form>
-            </div>
-
-            {/* RIGHT COLUMN: Live Preview Card */}
-            <div className="bg-card-bg border border-ui-border rounded-2xl shadow-sm p-6 h-fit">
-                <h2 className="font-heading text-lg font-bold text-text-main mb-4">
-                    Student Profile Preview
-                </h2>
-
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-brand-primary flex items-center justify-center text-white font-bold text-base shadow-sm">
-                        <User size={22} />
-                    </div>
-                    <div>
-                        <p className="font-heading font-semibold text-text-main">
-                            {user?.name || 'Student Name'}
-                        </p>
-                        <p className="text-text-subtle text-xs font-mono">
-                            {user?.studentNumber || 'Student Number'}
-                        </p>
-                    </div>
+                        <div className="mt-6 pt-5 border-t border-ui-border">
+                            <div className="flex items-center justify-between mb-2 text-sm">
+                                <span className="font-medium">Profile completeness</span>
+                                <span className="text-text-muted">{completeness}%</span>
+                            </div>
+                            <ProgressBar value={completeness} />
+                            {completeness >= 100 ? (
+                                <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald-700">
+                                    <CheckCircle2 className="w-4 h-4" /> Your profile is complete
+                                </p>
+                            ) : (
+                                <p className="mt-3 text-sm text-text-muted">Add a bio, skills and a CV link to stand out.</p>
+                            )}
+                            {!profileId && completeness >= 100 && (
+                                <p className="mt-1 text-sm text-text-muted">Remember to save your profile.</p>
+                            )}
+                        </div>
+                        {resumeLink && isValidUrl(resumeLink) && (
+                            <Button href={resumeLink} target="_blank" rel="noreferrer" variant="secondary" icon={ExternalLink} className="mt-5 w-full">
+                                Open CV / LinkedIn
+                            </Button>
+                        )}
+                    </Card>
                 </div>
 
-                <p className="text-text-main text-sm mb-4 leading-relaxed">
-                    {bio || <span className="text-text-subtle italic">Your bio summary will appear here once typed.</span>}
-                </p>
-
-                {skills.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-6">
-                        {skills.map((skill) => (
-                            <span
-                                key={skill}
-                                className="bg-emerald-50 text-brand-mint border border-emerald-200 rounded-xl px-3 py-1 text-xs font-mono"
+                <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader
+                            title="Professional profile"
+                            subtitle={profileId ? 'Keep your details up to date.' : 'You have not created a profile yet. Fill in the details below to get started.'}
+                        />
+                        <form onSubmit={saveProfile} className="space-y-5" noValidate>
+                            <Field
+                                label="Bio"
+                                htmlFor="bio"
+                                required
+                                error={errors.bio}
+                                hint={`${bio.length}/${BIO_MAX} characters`}
                             >
-                                {skill}
-                            </span>
-                        ))}
-                    </div>
-                )}
+                                <Textarea
+                                    id="bio"
+                                    rows={4}
+                                    maxLength={BIO_MAX}
+                                    value={bio}
+                                    onChange={(e) => setBio(e.target.value)}
+                                    placeholder="e.g. Final-year Diploma in ICT student passionate about backend development and cloud."
+                                    className={errors.bio ? 'border-rose-400' : undefined}
+                                />
+                            </Field>
 
-                <div className="pt-4 border-t border-ui-border">
-                    {resumeLink ? (
-                        <a
-                            href={resumeLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 text-brand-accent hover:underline text-xs font-semibold"
-                        >
-                            <LinkIcon size={14} /> View Student Resume / CV
-                        </a>
-                    ) : (
-                        <span className="text-text-subtle text-xs italic">No resume linked yet</span>
-                    )}
+                            <Field
+                                label="Skills"
+                                htmlFor="skills"
+                                required
+                                error={errors.skills}
+                                hint="Type a skill and press Enter to add it."
+                            >
+                                <div
+                                    className={`flex flex-wrap items-center gap-2 rounded-lg border bg-white px-2 py-2 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100 ${errors.skills ? 'border-rose-400' : 'border-ui-border'}`}
+                                >
+                                    {skills.map((skill) => (
+                                        <span key={skill} className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-sm font-medium text-primary-700">
+                                            {skill}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeSkill(skill)}
+                                                className="rounded text-primary-500 hover:text-primary-800 cursor-pointer"
+                                                aria-label={`Remove ${skill}`}
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                    <input
+                                        id="skills"
+                                        value={skillInput}
+                                        onChange={(e) => setSkillInput(e.target.value)}
+                                        onKeyDown={onSkillKeyDown}
+                                        onBlur={addSkill}
+                                        placeholder={skills.length ? 'Add another skill' : 'e.g. Java, React, SQL'}
+                                        className="flex-1 min-w-32 h-7 px-1 text-sm outline-none bg-transparent placeholder:text-text-subtle"
+                                    />
+                                </div>
+                            </Field>
+
+                            <Field
+                                label="CV or LinkedIn link"
+                                htmlFor="resumeLink"
+                                required
+                                error={errors.resumeLink}
+                                hint="A public link to your CV (Google Drive, OneDrive) or your LinkedIn profile."
+                            >
+                                <Input
+                                    id="resumeLink"
+                                    type="url"
+                                    icon={LinkIcon}
+                                    value={resumeLink}
+                                    onChange={(e) => setResumeLink(e.target.value)}
+                                    placeholder="https://www.linkedin.com/in/your-name"
+                                    invalid={Boolean(errors.resumeLink)}
+                                />
+                            </Field>
+
+                            <div className="flex justify-end">
+                                <Button type="submit" loading={savingProfile}>
+                                    {profileId ? 'Save changes' : 'Create profile'}
+                                </Button>
+                            </div>
+                        </form>
+                    </Card>
+
+                    <Card>
+                        <CardHeader title="Account" subtitle="Your sign-in details." />
+                        <form onSubmit={saveAccount} className="space-y-5" noValidate>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <Field label="Full name" htmlFor="name" required error={nameError}>
+                                    <Input
+                                        id="name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        invalid={Boolean(nameError)}
+                                        autoComplete="name"
+                                    />
+                                </Field>
+                                <Field label="Email" htmlFor="email" hint="Your CPUT email cannot be changed.">
+                                    <Input id="email" value={account.email} disabled readOnly />
+                                </Field>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <Badge tone="neutral">Student number {studentNumber}</Badge>
+                                <Button
+                                    type="submit"
+                                    variant="secondary"
+                                    loading={savingAccount}
+                                    disabled={name.trim() === account.name}
+                                >
+                                    Update name
+                                </Button>
+                            </div>
+                        </form>
+                    </Card>
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

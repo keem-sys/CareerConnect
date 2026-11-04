@@ -1,168 +1,153 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Users, Building2, Briefcase, FileText, Award, ChevronRight, RefreshCw } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { getAdminStats } from '../../services/statsService';
+import { getAllApplications } from '../../services/applicationService';
 import {
-    Users,
-    Building2,
-    Briefcase,
-    ShieldCheck,
-    ArrowRight,
-    Loader2
-} from 'lucide-react';
-import { useAuth } from "../../context/AuthContext.jsx";
-import { getAllStudents } from '../../services/studentService';
-import { getAllCompanies } from '../../services/companyService';
-import { getAllInternships } from '../../services/internshipService';
+    PageContainer, PageHeader, StatCard, Card, CardHeader, Table, StatusBadge, Alert, Button, EmptyState, Skeleton, cx,
+} from '../../components/ui';
+import { APPLICATION_STATUSES, STATUS_META, formatDate, errorMessage } from '../../lib/format';
+
+const BAR_COLORS = {
+    neutral: 'bg-slate-400',
+    info: 'bg-primary-500',
+    purple: 'bg-violet-500',
+    success: 'bg-emerald-500',
+    danger: 'bg-rose-500',
+    muted: 'bg-slate-300',
+};
+
+const QUICK_LINKS = [
+    { to: '/admin/students', icon: Users, title: 'Manage students', text: 'View, edit and remove student accounts.' },
+    { to: '/admin/companies', icon: Building2, title: 'Manage companies', text: 'Review employer partners and their postings.' },
+    { to: '/admin/internships', icon: Briefcase, title: 'Manage internships', text: 'Moderate listings across the platform.' },
+];
 
 export default function AdminDashboardPage() {
     const { user } = useAuth();
-    const [studentCount, setStudentCount] = useState(0);
-    const [companyCount, setCompanyCount] = useState(0);
-    const [internshipCount, setInternshipCount] = useState(0);
+    const [stats, setStats] = useState(null);
+    const [recent, setRecent] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
-        const fetchAdminStats = async () => {
-            try {
-                const [students, companies, internships] = await Promise.all([
-                    getAllStudents(),
-                    getAllCompanies(),
-                    getAllInternships()
-                ]);
-                setStudentCount(students?.length || 0);
-                setCompanyCount(companies?.length || 0);
-                setInternshipCount(internships?.length || 0);
-            } catch (err) {
-                console.error("Failed to load admin global metrics", err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        let cancelled = false;
+        Promise.all([getAdminStats(), getAllApplications().catch(() => [])])
+            .then(([s, apps]) => {
+                if (cancelled) return;
+                setStats(s);
+                const sorted = [...(apps || [])].sort((a, b) => new Date(b.dateApplied || 0) - new Date(a.dateApplied || 0));
+                setRecent(sorted.slice(0, 8));
+            })
+            .catch((err) => { if (!cancelled) setError(errorMessage(err, 'Could not load platform statistics.')); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [reloadKey]);
 
-        fetchAdminStats();
-    }, []);
+    const load = () => {
+        setLoading(true);
+        setError('');
+        setReloadKey((k) => k + 1);
+    };
+
+    const byStatus = stats?.byStatus ?? {};
+    const maxCount = Math.max(1, ...APPLICATION_STATUSES.map((s) => byStatus[s] ?? 0));
+    const rate = stats?.placementRate != null ? `${stats.placementRate}% placement rate (of decided)` : undefined;
+
+    const columns = [
+        { key: 'student', header: 'Student', render: (a) => (
+            <div>
+                <p className="font-medium text-text-main">{a.student?.name ?? '—'}</p>
+                <p className="text-xs text-text-muted">{a.student?.studentNumber}</p>
+            </div>
+        ) },
+        { key: 'internship', header: 'Internship', render: (a) => (
+            a.internship?.internshipId
+                ? <Link to={`/internships/${a.internship.internshipId}`} className="text-primary-700 hover:underline">{a.internship.title}</Link>
+                : '—'
+        ) },
+        { key: 'company', header: 'Company', className: 'hidden md:table-cell', render: (a) => a.internship?.companyName ?? '—' },
+        { key: 'status', header: 'Status', render: (a) => <StatusBadge status={a.status} /> },
+        { key: 'date', header: 'Applied', className: 'hidden sm:table-cell whitespace-nowrap text-text-muted', render: (a) => formatDate(a.dateApplied) },
+    ];
 
     return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+        <PageContainer>
+            <PageHeader
+                title="Platform overview"
+                subtitle={`Welcome back${user?.name ? `, ${user.name}` : ''}. Here is how CareerConnect is performing.`}
+                actions={<Button variant="secondary" icon={RefreshCw} onClick={load} loading={loading}>Refresh</Button>}
+            />
 
-            {/* Header Banner */}
-            <div className="bg-card-bg border border-ui-border rounded-3xl p-8 shadow-sm relative overflow-hidden">
-                <div className="space-y-2">
-                    <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full text-amber-600 text-xs font-mono font-semibold">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>ADMINISTRATOR CONTROL PANEL</span>
-                    </div>
-                    <h1 className="font-heading text-3xl sm:text-4xl font-extrabold text-text-main">
-                        System Overview, {user?.name} 🛡️
-                    </h1>
-                    <p className="text-text-muted text-xs sm:text-sm max-w-2xl">
-                        Manage student accounts, verify employer registrations, and oversee all active platform internship postings.
-                    </p>
+            {error && <Alert className="mb-6" title="Something went wrong">{error}</Alert>}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <StatCard label="Students" value={stats?.students ?? 0} icon={Users} loading={loading} />
+                <StatCard label="Companies" value={stats?.companies ?? 0} icon={Building2} tone="purple" loading={loading} />
+                <StatCard label="Open internships" value={stats?.openInternships ?? 0} hint={stats ? `of ${stats.internships} total` : undefined} icon={Briefcase} tone="neutral" loading={loading} />
+                <StatCard label="Applications" value={stats?.applications ?? 0} icon={FileText} tone="warning" loading={loading} />
+                <StatCard label="Placements" value={stats?.placements ?? 0} hint={rate} icon={Award} tone="success" loading={loading} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <Card className="lg:col-span-2">
+                    <CardHeader title="Applications by status" subtitle="Where every application currently stands" />
+                    {loading ? (
+                        <div className="space-y-3">{APPLICATION_STATUSES.map((s) => <Skeleton key={s} className="h-6 w-full" />)}</div>
+                    ) : (
+                        <div className="space-y-3">
+                            {APPLICATION_STATUSES.map((s) => {
+                                const count = byStatus[s] ?? 0;
+                                return (
+                                    <div key={s} className="flex items-center gap-3">
+                                        <span className="w-28 shrink-0 text-sm text-text-muted">{STATUS_META[s].label}</span>
+                                        <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                                            <div className={cx('h-full rounded-full', BAR_COLORS[STATUS_META[s].tone])} style={{ width: `${(count / maxCount) * 100}%` }} />
+                                        </div>
+                                        <span className="w-10 text-right text-sm font-semibold">{count}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </Card>
+
+                <div className="space-y-3">
+                    {QUICK_LINKS.map(({ to, icon: Icon, title, text }) => (
+                        <Link key={to} to={to} className="block">
+                            <Card hover className="flex items-center gap-4 !p-4">
+                                <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+                                    <Icon className="w-5 h-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold">{title}</p>
+                                    <p className="text-sm text-text-muted">{text}</p>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-text-subtle" />
+                            </Card>
+                        </Link>
+                    ))}
                 </div>
             </div>
 
-            {/* TIER 1: LIVE DATABASE STAT METRICS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                {/* Students Metric */}
-                <div className="bg-card-bg border border-ui-border p-6 rounded-2xl shadow-sm flex items-center space-x-4">
-                    <div className="p-3.5 bg-brand-primary/10 text-brand-accent border border-brand-accent/20 rounded-xl">
-                        <Users className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-text-muted text-xs font-semibold uppercase tracking-wider">Registered Students</p>
-                        <h3 className="font-heading text-2xl font-bold text-text-main mt-0.5">
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin inline text-brand-accent" /> : `${studentCount} Students`}
-                        </h3>
-                    </div>
+            <Card padding={false}>
+                <div className="px-5 sm:px-6 pt-5">
+                    <CardHeader title="Recent applications" subtitle="The latest submissions across all companies" />
                 </div>
-
-                {/* Companies Metric */}
-                <div className="bg-card-bg border border-ui-border p-6 rounded-2xl shadow-sm flex items-center space-x-4">
-                    <div className="p-3.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl">
-                        <Building2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-text-muted text-xs font-semibold uppercase tracking-wider">Registered Companies</p>
-                        <h3 className="font-heading text-2xl font-bold text-text-main mt-0.5">
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin inline text-amber-600" /> : `${companyCount} Partners`}
-                        </h3>
-                    </div>
-                </div>
-
-                {/* Internships Metric */}
-                <div className="bg-card-bg border border-ui-border p-6 rounded-2xl shadow-sm flex items-center space-x-4">
-                    <div className="p-3.5 bg-emerald-50 text-brand-mint border border-emerald-200 rounded-xl">
-                        <Briefcase className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-text-muted text-xs font-semibold uppercase tracking-wider">Global Internships</p>
-                        <h3 className="font-heading text-2xl font-bold text-text-main mt-0.5">
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin inline text-brand-mint" /> : `${internshipCount} Active`}
-                        </h3>
-                    </div>
-                </div>
-
-            </div>
-
-            {/* TIER 2: MANAGEMENT & GOVERNANCE QUICK ACTIONS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                {/* 1. Student Directory Link */}
-                <div className="bg-card-bg border border-ui-border p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-brand-accent/40 transition-all">
-                    <div>
-                        <div className="w-10 h-10 bg-brand-primary/10 text-brand-accent border border-brand-accent/20 rounded-xl flex items-center justify-center mb-3">
-                            <Users className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-heading text-base font-bold text-text-main mb-1">Student Directory</h3>
-                        <p className="text-text-muted text-xs leading-relaxed">Search, inspect, and manage student accounts in the database.</p>
-                    </div>
-                    <Link
-                        to="/admin/students"
-                        className="mt-4 inline-flex items-center space-x-1.5 text-xs font-semibold text-brand-accent hover:underline"
-                    >
-                        <span>Manage Students</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                </div>
-
-                {/* 2. Company Management Link */}
-                <div className="bg-card-bg border border-ui-border p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-400/40 transition-all">
-                    <div>
-                        <div className="w-10 h-10 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl flex items-center justify-center mb-3">
-                            <Building2 className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-heading text-base font-bold text-text-main mb-1">Company Management</h3>
-                        <p className="text-text-muted text-xs leading-relaxed">Audit corporate partners, onboard companies, and inspect postings.</p>
-                    </div>
-                    <Link
-                        to="/admin/companies"
-                        className="mt-4 inline-flex items-center space-x-1.5 text-xs font-semibold text-amber-600 hover:underline"
-                    >
-                        <span>Manage Employers</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                </div>
-
-                {/* 3. Internships Link */}
-                <div className="bg-card-bg border border-ui-border p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-brand-mint/40 transition-all">
-                    <div>
-                        <div className="w-10 h-10 bg-emerald-50 text-brand-mint border border-emerald-200 rounded-xl flex items-center justify-center mb-3">
-                            <Briefcase className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-heading text-base font-bold text-text-main mb-1">Opportunity Oversight</h3>
-                        <p className="text-text-muted text-xs leading-relaxed">Moderate, audit, edit, or prune active and expired listings.</p>
-                    </div>
-                    <Link
-                        to="/admin/internships"
-                        className="mt-4 inline-flex items-center space-x-1.5 text-xs font-semibold text-brand-mint hover:underline"
-                    >
-                        <span>Manage Postings</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                </div>
-
-            </div>
-
-        </div>
+                {loading ? (
+                    <div className="px-6 pb-6 space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                ) : (
+                    <Table
+                        columns={columns}
+                        rows={recent}
+                        rowKey={(a) => a.applicationId}
+                        empty={<EmptyState icon={FileText} title="No applications yet" description="Applications will appear here once students start applying." />}
+                    />
+                )}
+            </Card>
+        </PageContainer>
     );
 }

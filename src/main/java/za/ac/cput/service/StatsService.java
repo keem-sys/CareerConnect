@@ -76,7 +76,8 @@ public class StatsService {
                 .sorted(Comparator.comparing(Internship::getDeadline, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(i -> {
                     List<Application> list = perPosting.getOrDefault(i.getInternshipId(), List.of());
-                    long pending = list.stream().filter(a -> a.getStatus() == ApplicationStatus.PENDING).count();
+                    long pending = list.stream().filter(a -> a.getStatus() == ApplicationStatus.PENDING
+                            || a.getStatus() == ApplicationStatus.UNDER_REVIEW).count();
                     return new PostingSummary(i.getInternshipId(), i.getTitle(), i.isOpen(), i.getDeadline(),
                             list.size(), pending);
                 })

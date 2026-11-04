@@ -1,500 +1,235 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import {
-    GraduationCap,
-    User,
-    Mail,
-    Lock,
-    Hash,
-    Building2,
-    ArrowRight,
-    CheckCircle2,
-    AlertCircle,
-    Loader2,
-    Briefcase,
-    Eye,
-    EyeOff,
-} from 'lucide-react';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { GraduationCap, Building2, Hash, User, Mail, Briefcase, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.jsx';
+import apiClient from '../services/apiClient.js';
 import { createStudent } from '../services/studentService';
-import { useAuth } from '../context/AuthContext';
 import { createCompany } from '../services/companyService';
-import apiClient from "../services/apiClient.js";
+import { useToast } from '../components/ui/Toast';
+import { Alert, Button, Card, Field, Input, cx } from '../components/ui';
+import { AuthLayout, PasswordInput } from '../components/auth/AuthLayout';
+import { errorMessage } from '../lib/format';
+
+const ROLES = [
+    { value: 'STUDENT', icon: GraduationCap, title: "I'm a student", text: 'Find and apply for internships' },
+    { value: 'COMPANY', icon: Building2, title: "I'm an employer", text: 'Post roles and hire interns' },
+];
+
+const EMPTY = { studentNumber: '', name: '', companyEmail: '', industry: '', password: '', confirmPassword: '' };
+
+function passwordStrength(pw) {
+    if (!pw) return null;
+    const score = [pw.length >= 8, /[A-Z]/.test(pw) && /[a-z]/.test(pw), /\d/.test(pw), /[^A-Za-z0-9]/.test(pw)].filter(Boolean).length;
+    if (score <= 1) return { label: 'Weak', tone: 'text-rose-600', bar: 'bg-rose-500', width: 'w-1/4' };
+    if (score === 2) return { label: 'Fair', tone: 'text-amber-600', bar: 'bg-amber-500', width: 'w-2/4' };
+    if (score === 3) return { label: 'Good', tone: 'text-primary-700', bar: 'bg-primary-600', width: 'w-3/4' };
+    return { label: 'Strong', tone: 'text-emerald-600', bar: 'bg-emerald-500', width: 'w-full' };
+}
+
+const generateCompanyId = () => `COMP-${Date.now().toString(36).toUpperCase()}`;
 
 export default function SignupPage() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { login } = useAuth();
+    const { toast } = useToast();
     const from = location.state?.from?.pathname || '/';
 
     const [role, setRole] = useState('STUDENT');
+    const [form, setForm] = useState(EMPTY);
+    const [errors, setErrors] = useState({});
+    const [consent, setConsent] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { login } = useAuth();
 
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const isStudent = role === 'STUDENT';
+    const studentEmail = form.studentNumber.trim() ? `${form.studentNumber.trim()}@mycput.ac.za` : '';
+    const strength = passwordStrength(form.password);
 
-    const [popiaConsent, setPopiaConsent] = useState(false);
+    const update = (e) => {
+        const { name, value } = e.target;
+        setForm((f) => ({ ...f, [name]: value }));
+        if (errors[name]) setErrors((er) => ({ ...er, [name]: undefined }));
+    };
 
-    const [formData, setFormData] = useState({
-        studentNumber: '',
-        name: '',
-        password: '',
-        confirmPassword: '',
-        companyId: '',
-        companyEmail: '',
-        industry: ''
-    });
+    const switchRole = (value) => {
+        setRole(value);
+        setErrors({});
+        setError('');
+    };
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    const validate = () => {
+        const er = {};
+        if (isStudent && !form.studentNumber.trim()) er.studentNumber = 'Enter your student number.';
+        if (!form.name.trim()) er.name = isStudent ? 'Enter your full name.' : 'Enter your company name.';
+        if (!isStudent) {
+            if (!form.industry.trim()) er.industry = 'Enter your industry.';
+            if (!/^\S+@\S+\.\S+$/.test(form.companyEmail.trim())) er.companyEmail = 'Enter a valid email address.';
+        }
+        if (!form.password) er.password = 'Choose a password.';
+        if (form.password !== form.confirmPassword) er.confirmPassword = 'Passwords do not match.';
+        if (!consent) er.consent = 'You must accept the POPIA data privacy terms to create an account.';
+        setErrors(er);
+        return Object.keys(er).length === 0;
+    };
+
+    const signIn = async (identifier) => {
+        const { data } = await apiClient.post('/auth/login', { identifier, password: form.password });
+        if (!data?.token) return false;
+        login({
+            name: data.name,
+            id: data.id,
+            studentNumber: data.role === 'STUDENT' ? data.id : undefined,
+            companyId: data.role === 'COMPANY' ? data.id : undefined,
+            email: data.email,
+            role: data.role,
+            token: data.token,
+        });
+        return true;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-
-        if (!popiaConsent) {
-            setError('You must accept the POPIA data privacy terms to create an account.');
-            return;
-        }
-
-        if (formData.password !== formData.confirmPassword) {
-            setError('Passwords do not match. Please verify your password.');
-            return;
-        }
-
+        if (!validate()) return;
         setLoading(true);
-
+        let identifier;
         try {
-            if (role === 'STUDENT') {
-                const generatedCputEmail = `${formData.studentNumber.trim()}@mycput.ac.za`;
-
-                const studentPayload = {
-                    studentNumber: formData.studentNumber.trim(),
-                    name: formData.name.trim(),
-                    email: generatedCputEmail,
-                    password: formData.password,
-                    confirmPassword: formData.confirmPassword
-                };
-
-                await createStudent(studentPayload);
-
-                const loginResponse = await apiClient.post('/auth/login', {
-                    identifier: generatedCputEmail,
-                    password: formData.password
+            if (isStudent) {
+                identifier = studentEmail;
+                await createStudent({
+                    studentNumber: form.studentNumber.trim(),
+                    name: form.name.trim(),
+                    email: studentEmail,
+                    password: form.password,
+                    confirmPassword: form.confirmPassword,
                 });
-
-                const authData = loginResponse.data;
-                if (authData && authData.token) {
-                    login({
-                        name: authData.name,
-                        id: authData.id,
-                        studentNumber: authData.id, // Mapped universally from authData.id
-                        email: authData.email,
-                        role: authData.role,
-                        token: authData.token
-                    });
-                    navigate(from, { replace: true });
-                } else {
-                    setError('Registration succeeded, but auto-login failed. Please sign in manually.');
-                    navigate('/login');
-                }
-
             } else {
-                const companyPayload = {
-                    companyId: formData.companyId.trim(),
-                    name: formData.name.trim(),
-                    industry: formData.industry.trim(),
-                    contactEmail: formData.companyEmail.trim(),
-                    password: formData.password
-                };
-
-                await createCompany(companyPayload);
-
-                const loginResponse = await apiClient.post('/auth/login', {
-                    identifier: formData.companyEmail.trim(),
-                    password: formData.password
+                identifier = form.companyEmail.trim();
+                await createCompany({
+                    companyId: generateCompanyId(),
+                    name: form.name.trim(),
+                    industry: form.industry.trim(),
+                    contactEmail: identifier,
+                    password: form.password,
                 });
-
-                const authData = loginResponse.data;
-                if (authData && authData.token) {
-                    login({
-                        name: authData.name,
-                        id: authData.id,
-                        companyId: authData.id, // Mapped universally from authData.id for companies
-                        email: authData.email,
-                        role: authData.role,
-                        token: authData.token
-                    });
-                    navigate(from, { replace: true });
-                } else {
-                    setError('Registration succeeded, but auto-login failed. Please sign in manually.');
-                    navigate('/login');
-                }
             }
         } catch (err) {
-            const errorMsg = err.response?.data || 'Could not connect to Spring Boot backend. Ensure server is running.';
-            setError(typeof errorMsg === 'string' ? errorMsg : 'Registration failed.');
+            setError(errorMessage(err, 'Registration failed. Please check your details and try again.'));
+            setLoading(false);
+            return;
+        }
+        try {
+            if (await signIn(identifier)) {
+                toast('Welcome to CareerConnect! Your account is ready.', 'success');
+                navigate(from, { replace: true });
+                return;
+            }
+            throw new Error('No token');
+        } catch {
+            toast('Account created. Please sign in to continue.', 'info');
+            navigate('/login');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-[calc(100vh-5rem)] bg-app-bg flex items-center justify-center p-4 sm:p-6 lg:p-8">
-            <div className="w-full max-w-5xl bg-card-bg/90 border border-ui-border rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 backdrop-blur-xl">
+        <AuthLayout title="Join CareerConnect today." text="Create a free account in under a minute.">
+            <div className="w-full max-w-lg">
+                <Card className="sm:!p-8">
+                    <h1 className="text-2xl font-bold">Create your account</h1>
+                    <p className="text-sm text-text-muted mt-1">
+                        Already have an account? <Link to="/login" className="font-semibold text-primary-700 hover:underline">Sign in</Link>
+                    </p>
 
-                {/* LEFT COLUMN: Hero & Branding Banner */}
-                <div className="lg:col-span-5 bg-gradient-to-br from-brand-primary/10 via-card-bg to-brand-accent/5 p-8 sm:p-10 border-b lg:border-b-0 lg:border-r border-ui-border relative overflow-hidden flex flex-col justify-between">
-                    <div className="absolute top-0 right-0 -mt-12 -mr-12 w-48 h-48 bg-brand-accent/10 rounded-full blur-3xl pointer-events-none" />
-
-                    <div className="space-y-6">
-                        <div className="inline-flex items-center space-x-2 bg-brand-primary/10 border border-brand-accent/30 px-3 py-1 rounded-full text-brand-accent text-xs font-mono font-semibold">
-                            <GraduationCap className="w-4 h-4" />
-                            <span>{role === 'STUDENT' ? 'CPUT Student Portal' : 'Employer Recruitment Portal'}</span>
-                        </div>
-
-                        <h1 className="font-heading text-3xl sm:text-4xl font-extrabold text-text-main tracking-tight leading-tight">
-                            {role === 'STUDENT'
-                                ? 'Start Your Journey to Industry Success'
-                                : 'Recruit Top CPUT Tech Talent'}
-                        </h1>
-
-                        <p className="text-text-muted text-sm leading-relaxed">
-                            {role === 'STUDENT'
-                                ? 'Connect directly with top tech companies, apply for verified CPUT Work-Integrated Learning (WIL) internships, and track your applications in real-time.'
-                                : 'Partner with CPUT to post WIL internship opportunities, review verified student developer profiles, and hire top-tier tech talent.'}
-                        </p>
-
-                        {/* Dynamic Checkpoints */}
-                        <div className="space-y-3 pt-2">
-                            {role === 'STUDENT' ? (
-                                <>
-                                    <div className="flex items-center space-x-3 text-text-main text-xs font-medium">
-                                        <CheckCircle2 className="w-4 h-4 text-brand-mint shrink-0" />
-                                        <span>Verified CPUT Internship Postings</span>
-                                    </div>
-                                    <div className="flex items-center space-x-3 text-text-main text-xs font-medium">
-                                        <CheckCircle2 className="w-4 h-4 text-brand-mint shrink-0" />
-                                        <span>Direct Employer Recruitment</span>
-                                    </div>
-                                    <div className="flex items-center space-x-3 text-text-main text-xs font-medium">
-                                        <CheckCircle2 className="w-4 h-4 text-brand-mint shrink-0" />
-                                        <span>Real-Time Status Tracking</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="flex items-center space-x-3 text-text-main text-xs font-medium">
-                                        <CheckCircle2 className="w-4 h-4 text-brand-mint shrink-0" />
-                                        <span>Access Vetted CPUT IT Talent</span>
-                                    </div>
-                                    <div className="flex items-center space-x-3 text-text-main text-xs font-medium">
-                                        <CheckCircle2 className="w-4 h-4 text-brand-mint shrink-0" />
-                                        <span>Post WIL Internship Listings</span>
-                                    </div>
-                                    <div className="flex items-center space-x-3 text-text-main text-xs font-medium">
-                                        <CheckCircle2 className="w-4 h-4 text-brand-mint shrink-0" />
-                                        <span>Direct Candidate Applications</span>
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                    <div className="grid grid-cols-2 gap-3 mt-6" role="radiogroup" aria-label="Account type">
+                        {ROLES.map(({ value, icon: Icon, title, text }) => (
+                            <button
+                                key={value}
+                                type="button"
+                                role="radio"
+                                aria-checked={role === value}
+                                onClick={() => switchRole(value)}
+                                className={cx(
+                                    'text-left rounded-lg border p-3 sm:p-4 transition-colors cursor-pointer',
+                                    role === value ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-600' : 'border-ui-border hover:border-primary-200',
+                                )}
+                            >
+                                <Icon className={cx('w-5 h-5', role === value ? 'text-primary-600' : 'text-text-subtle')} />
+                                <p className="font-semibold text-sm mt-2">{title}</p>
+                                <p className="text-xs text-text-muted mt-0.5">{text}</p>
+                            </button>
+                        ))}
                     </div>
 
-                    <div className="pt-6 mt-6 border-t border-ui-border">
-                        <p className="text-xs text-text-muted">
-                            Already have an account?{' '}
-                            <Link to="/login" className="text-brand-accent font-semibold hover:underline">
-                                Sign In here
-                            </Link>
-                        </p>
-                    </div>
-                </div>
+                    {error && <Alert className="mt-5">{error}</Alert>}
 
-                {/* RIGHT COLUMN: Role-Based Registration Form */}
-                <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-center">
-
-                    {/* Header */}
-                    <div className="mb-6">
-                        <h2 className="font-heading text-2xl font-bold text-text-main">Create Account</h2>
-                        <p className="text-text-muted text-xs mt-1">Select your role to view relevant registration fields</p>
-                    </div>
-
-                    {/* Role Toggle Tabs */}
-                    <div className="grid grid-cols-2 gap-2 bg-app-bg p-1.5 rounded-2xl border border-ui-border mb-6">
-                        <button
-                            type="button"
-                            onClick={() => { setRole('STUDENT'); setError(''); }}
-                            className={`flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                                role === 'STUDENT'
-                                    ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/20'
-                                    : 'text-text-muted hover:text-text-main'
-                            }`}
-                        >
-                            <User className="w-3.5 h-3.5" />
-                            <span>CPUT Student</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setRole('COMPANY'); setError(''); }}
-                            className={`flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                                role === 'COMPANY'
-                                    ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/20'
-                                    : 'text-text-muted hover:text-text-main'
-                            }`}
-                        >
-                            <Building2 className="w-3.5 h-3.5" />
-                            <span>Employer / Company</span>
-                        </button>
-                    </div>
-
-                    {/* Error Banner */}
-                    {error && (
-                        <div className="flex items-center space-x-2 bg-rose-50 border border-rose-200 text-rose-900 p-3.5 rounded-xl text-xs font-semibold shadow-sm mb-6">
-                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-4">
-
-                        {/* STUDENT FORM FIELDS */}
-                        {role === 'STUDENT' ? (
+                    <form onSubmit={handleSubmit} noValidate className="space-y-4 mt-6">
+                        {isStudent ? (
                             <>
-                                {/* Student Number Input + Live Email Preview Badge */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-text-muted mb-1.5">
-                                        CPUT Student Number
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                            <Hash className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            name="studentNumber"
-                                            value={formData.studentNumber}
-                                            onChange={handleChange}
-                                            placeholder="e.g. 240456890"
-                                            autoComplete="username"
-                                            required
-                                            className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main placeholder-text-muted/60 focus:outline-none focus:ring-1 focus:ring-brand-accent transition-all font-mono"
-                                        />
-                                    </div>
-
-                                    {/* Live CPUT Email Preview Badge */}
-                                    {formData.studentNumber.trim() && (
-                                        <div className="mt-2 flex items-center space-x-2 text-[11px] text-brand-mint bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg font-mono">
-                                            <Mail className="w-3.5 h-3.5" />
-                                            <span>Official CPUT Email: <strong>{formData.studentNumber.trim()}@mycput.ac.za</strong></span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Student Full Name */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-text-muted mb-1.5">
-                                        Full Name
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                            <User className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={formData.name}
-                                            onChange={handleChange}
-                                            placeholder="e.g. Thamiso Tandeke"
-                                            autoComplete="name"
-                                            required
-                                            className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main placeholder-text-muted/60 focus:outline-none focus:ring-1 focus:ring-brand-accent transition-all"
-                                        />
-                                    </div>
-                                </div>
+                                <Field label="Student number" htmlFor="studentNumber" required error={errors.studentNumber}>
+                                    <Input id="studentNumber" name="studentNumber" icon={Hash} value={form.studentNumber} onChange={update} placeholder="e.g. 230480152" autoComplete="username" invalid={!!errors.studentNumber} />
+                                </Field>
+                                <Field label="Full name" htmlFor="name" required error={errors.name}>
+                                    <Input id="name" name="name" icon={User} value={form.name} onChange={update} placeholder="e.g. Thandiwe Mokoena" autoComplete="name" invalid={!!errors.name} />
+                                </Field>
+                                <Field label="CPUT email" htmlFor="studentEmail" hint="Generated from your student number. Use it or your student number to sign in.">
+                                    <Input id="studentEmail" icon={Mail} value={studentEmail} placeholder="studentnumber@mycput.ac.za" disabled readOnly />
+                                </Field>
                             </>
                         ) : (
-                            /* EMPLOYER FORM FIELDS */
                             <>
-                                {/* Company Registration ID */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-text-muted mb-1.5">
-                                        Company Registration ID
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                            <Hash className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            name="companyId"
-                                            value={formData.companyId}
-                                            onChange={handleChange}
-                                            placeholder="e.g. C001"
-                                            autoComplete="username"
-                                            required
-                                            className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main font-mono"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Company Name */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-text-muted mb-1.5">
-                                        Company Name
-                                    </label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                            <Building2 className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={formData.name}
-                                            onChange={handleChange}
-                                            placeholder="e.g. TechNova Systems"
-                                            autoComplete="name"
-                                            required
-                                            className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Corporate Email */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-text-muted mb-1.5">Corporate Email Address</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                            <Mail className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="email"
-                                            name="companyEmail"
-                                            value={formData.companyEmail}
-                                            onChange={handleChange}
-                                            placeholder="e.g. hr@technova.co.za"
-                                            autoComplete="email"
-                                            required
-                                            className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Industry Field */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-text-muted mb-1.5">Industry Sector</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                            <Briefcase className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            name="industry"
-                                            value={formData.industry}
-                                            onChange={handleChange}
-                                            placeholder="e.g. Software Development"
-                                            required
-                                            className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main"
-                                        />
-                                    </div>
-                                </div>
+                                <Field label="Company name" htmlFor="name" required error={errors.name}>
+                                    <Input id="name" name="name" icon={Building2} value={form.name} onChange={update} placeholder="e.g. Takealot Group" autoComplete="organization" invalid={!!errors.name} />
+                                </Field>
+                                <Field label="Industry" htmlFor="industry" required error={errors.industry}>
+                                    <Input id="industry" name="industry" icon={Briefcase} value={form.industry} onChange={update} placeholder="e.g. E-commerce" invalid={!!errors.industry} />
+                                </Field>
+                                <Field label="Contact email" htmlFor="companyEmail" required error={errors.companyEmail} hint="You will use this email to sign in.">
+                                    <Input id="companyEmail" name="companyEmail" type="email" icon={Mail} value={form.companyEmail} onChange={update} placeholder="careers@company.co.za" autoComplete="email" invalid={!!errors.companyEmail} />
+                                </Field>
                             </>
                         )}
 
-                        {/* Password Input */}
-                        <div>
-                            <label className="block text-xs font-semibold text-text-muted mb-1.5">Password</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                    <Lock className="w-4 h-4" />
-                                </div>
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    placeholder="••••••••"
-                                    autoComplete="new-password"
-                                    required
-                                    className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-10 py-2.5 text-xs text-text-main font-mono"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-muted hover:text-text-main cursor-pointer"
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
-                            </div>
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            <Field label="Password" htmlFor="password" required error={errors.password}>
+                                <PasswordInput id="password" name="password" value={form.password} onChange={update} autoComplete="new-password" invalid={!!errors.password} />
+                            </Field>
+                            <Field label="Confirm password" htmlFor="confirmPassword" required error={errors.confirmPassword}>
+                                <PasswordInput id="confirmPassword" name="confirmPassword" value={form.confirmPassword} onChange={update} autoComplete="new-password" invalid={!!errors.confirmPassword} />
+                            </Field>
                         </div>
-
-                        {/* Confirm Password Input */}
-                        <div>
-                            <label className="block text-xs font-semibold text-text-muted mb-1.5">Confirm Password</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
-                                    <Lock className="w-4 h-4" />
+                        {strength ? (
+                            <div className="flex items-center gap-3 -mt-1">
+                                <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                    <div className={cx('h-full rounded-full transition-all', strength.bar, strength.width)} />
                                 </div>
-                                <input
-                                    type={showConfirmPassword ? "text" : "password"}
-                                    name="confirmPassword"
-                                    value={formData.confirmPassword}
-                                    onChange={handleChange}
-                                    placeholder="••••••••"
-                                    autoComplete="new-password"
-                                    required
-                                    className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-10 py-2.5 text-xs text-text-main font-mono"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-muted hover:text-text-main cursor-pointer"
-                                >
-                                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
+                                <span className={cx('text-xs font-medium', strength.tone)}>{strength.label}</span>
                             </div>
-                        </div>
+                        ) : (
+                            <p className="text-xs text-text-muted -mt-1">Use at least 8 characters with a mix of letters, numbers and symbols.</p>
+                        )}
 
-                        {/* POPIA Consent Checkbox */}
-                        <div className="pt-2">
-                            <label className="flex items-start space-x-2.5 cursor-pointer select-none">
+                        <div>
+                            <label className="flex items-start gap-2.5 text-sm text-text-muted cursor-pointer">
                                 <input
                                     type="checkbox"
-                                    checked={popiaConsent}
-                                    onChange={(e) => setPopiaConsent(e.target.checked)}
-                                    className="mt-0.5 w-4 h-4 text-brand-primary border-ui-border rounded focus:ring-brand-accent cursor-pointer"
+                                    checked={consent}
+                                    onChange={(e) => { setConsent(e.target.checked); setErrors((er) => ({ ...er, consent: undefined })); }}
+                                    className="mt-0.5 w-4 h-4 rounded border-ui-border accent-primary-600 cursor-pointer"
                                 />
-                                <span className="text-[11px] text-text-muted leading-tight">
-                                    I consent to CareerConnect processing my personal and academic data for recruitments in accordance with the <strong>Protection of Personal Information Act (POPIA)</strong>.
-                                </span>
+                                <span>I consent to CareerConnect processing my personal information in line with POPIA for internship placement purposes.</span>
                             </label>
+                            {errors.consent && <p className="text-xs text-rose-600 mt-1.5">{errors.consent}</p>}
                         </div>
 
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white font-semibold py-3 px-4 rounded-xl text-xs shadow-lg shadow-brand-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center space-x-2 mt-3 disabled:opacity-50 cursor-pointer"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Registering...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span>Complete Registration</span>
-                                    <ArrowRight className="w-4 h-4" />
-                                </>
-                            )}
-                        </button>
+                        <Button type="submit" size="lg" className="w-full" loading={loading}>
+                            {loading ? 'Creating account...' : <>Create account <ArrowRight className="w-4 h-4" /></>}
+                        </Button>
                     </form>
-
-                </div>
-
+                </Card>
             </div>
-        </div>
+        </AuthLayout>
     );
 }

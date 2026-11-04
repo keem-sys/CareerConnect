@@ -1,361 +1,343 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { CheckCircle2, ExternalLink, Mail, Search, Star, Users, XCircle, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import {getAllApplications, getCompanyApplications, updateApplicationStatus} from '../services/applicationService';
+import { getCompanyApplications, updateApplicationStatus } from '../services/applicationService';
+import { getInternshipsByCompany } from '../services/internshipService';
 import { getProfileByStudentNumber } from '../services/profileService';
+import { useToast } from '../components/ui/Toast';
 import {
-    Users,
-    Search,
-    CheckCircle2,
-    XCircle,
-    Clock,
-    ExternalLink,
-    AlertCircle,
-    Loader2,
-    X,
-    FileText
-} from 'lucide-react';
+    Alert, Avatar, Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, PageContainer, PageHeader,
+    Select, Skeleton, Spinner, StatusBadge, Tabs,
+} from '../components/ui';
+import { APPLICATION_STATUSES, NEXT_STATUSES, STATUS_META, errorMessage, formatDate, timeAgo } from '../lib/format';
+
+const ACTIONS = {
+    UNDER_REVIEW: { label: 'Move to review', variant: 'secondary', icon: Eye },
+    SHORTLISTED: { label: 'Shortlist', variant: 'primary', icon: Star },
+    ACCEPTED: { label: 'Make offer', variant: 'success', icon: CheckCircle2, confirm: true },
+    REJECTED: { label: 'Reject', variant: 'danger-outline', icon: XCircle, confirm: true },
+};
+
+const CONFIRM_COPY = {
+    ACCEPTED: (name) => ({
+        title: 'Make an offer?',
+        message: `${name} will be notified that they received an offer. This cannot be undone.`,
+        confirmLabel: 'Make offer',
+        variant: 'success',
+    }),
+    REJECTED: (name) => ({
+        title: 'Reject this applicant?',
+        message: `${name} will see their application as "Not selected". This cannot be undone.`,
+        confirmLabel: 'Reject',
+        variant: 'danger',
+    }),
+};
+
+function ApplicantDetails({ application, onChangeStatus, updating }) {
+    const studentNumber = application.student?.studentNumber;
+    const [profile, setProfile] = useState(null);
+    const [profileState, setProfileState] = useState(studentNumber ? 'loading' : 'missing');
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!studentNumber) return undefined;
+        getProfileByStudentNumber(studentNumber)
+            .then((p) => { if (!cancelled) { setProfile(p); setProfileState('ready'); } })
+            .catch(() => { if (!cancelled) setProfileState('missing'); });
+        return () => { cancelled = true; };
+    }, [studentNumber]);
+
+    const next = NEXT_STATUSES[application.status] ?? [];
+    const skills = Array.isArray(profile?.skills) ? profile.skills : [];
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-start gap-4">
+                <Avatar name={application.student?.name} size="lg" />
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold">{application.student?.name ?? 'Student'}</h3>
+                        <StatusBadge status={application.status} />
+                    </div>
+                    {application.student?.email && (
+                        <a href={`mailto:${application.student.email}`} className="text-sm text-primary-700 hover:underline inline-flex items-center gap-1.5 mt-0.5">
+                            <Mail className="w-4 h-4" />{application.student.email}
+                        </a>
+                    )}
+                    <p className="text-sm text-text-muted mt-1">Student number {studentNumber ?? '—'}</p>
+                </div>
+            </div>
+
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <dt className="text-text-muted">Applied for</dt>
+                    <dd className="font-medium">{application.internship?.title ?? '—'}</dd>
+                </div>
+                <div>
+                    <dt className="text-text-muted">Applied on</dt>
+                    <dd className="font-medium">{formatDate(application.dateApplied)}</dd>
+                </div>
+            </dl>
+
+            <section>
+                <h4 className="text-sm font-semibold mb-2">Cover letter</h4>
+                {application.coverLetter?.trim() ? (
+                    <p className="text-sm whitespace-pre-line rounded-lg bg-slate-50 border border-ui-border p-4">{application.coverLetter}</p>
+                ) : (
+                    <p className="text-sm text-text-muted">No cover letter was included.</p>
+                )}
+            </section>
+
+            <section>
+                <h4 className="text-sm font-semibold mb-2">Student profile</h4>
+                {profileState === 'loading' ? (
+                    <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div>
+                ) : profileState === 'missing' ? (
+                    <p className="text-sm text-text-muted">This student has not completed a profile yet.</p>
+                ) : (
+                    <div className="space-y-3">
+                        {profile?.bio && <p className="text-sm whitespace-pre-line">{profile.bio}</p>}
+                        {skills.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">{skills.map((s) => <Badge key={s}>{s}</Badge>)}</div>
+                        )}
+                        {profile?.resumeLink && (
+                            <a href={profile.resumeLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline">
+                                View CV <ExternalLink className="w-4 h-4" />
+                            </a>
+                        )}
+                        {!profile?.bio && skills.length === 0 && !profile?.resumeLink && (
+                            <p className="text-sm text-text-muted">The profile is empty.</p>
+                        )}
+                    </div>
+                )}
+            </section>
+
+            <section className="pt-5 border-t border-ui-border">
+                <h4 className="text-sm font-semibold mb-3">Update status</h4>
+                {next.length === 0 ? (
+                    <p className="text-sm text-text-muted">{STATUS_META[application.status]?.label ?? 'This'} is a final status. No further actions are available.</p>
+                ) : (
+                    <div className="flex flex-wrap gap-2">
+                        {next.map((status) => {
+                            const action = ACTIONS[status];
+                            return (
+                                <Button
+                                    key={status}
+                                    variant={action.variant}
+                                    icon={action.icon}
+                                    loading={updating === status}
+                                    disabled={!!updating}
+                                    onClick={() => onChangeStatus(application, status)}
+                                >
+                                    {action.label}
+                                </Button>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+}
 
 export default function CompanyApplicantsPage() {
     const { user } = useAuth();
+    const { toast } = useToast();
+    const companyId = user?.companyId ?? user?.id;
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedPosting = searchParams.get('internship') ?? searchParams.get('internshipId') ?? '';
+
     const [applications, setApplications] = useState([]);
+    const [postings, setPostings] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [updatingId, setUpdatingId] = useState(null);
-    const [message, setMessage] = useState({ type: '', text: '' });
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [error, setError] = useState('');
+    const [statusTab, setStatusTab] = useState('ALL');
+    const [query, setQuery] = useState('');
 
-    // Candidate Profile Modal State
-    const [selectedProfile, setSelectedProfile] = useState(null);
-    const [loadingProfile, setLoadingProfile] = useState(false);
+    const [selectedId, setSelectedId] = useState(null);
+    const [updating, setUpdating] = useState(null);
+    const [confirm, setConfirm] = useState(null);
 
-    // Fetch all applications
-    const fetchApplications = async () => {
-        try {
-            const data = await getCompanyApplications(user.companyId || user.email);
-            setApplications(data || []);
-        } catch (err) {
-            setMessage({ type: 'error', text: 'Failed to load student applicants from server.' });
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
-        fetchApplications();
-    }, []);
+        if (!companyId) return undefined;
+        let cancelled = false;
+        Promise.all([getCompanyApplications(companyId), getInternshipsByCompany(companyId).catch(() => [])])
+            .then(([apps, list]) => {
+                if (cancelled) return;
+                const sorted = (Array.isArray(apps) ? [...apps] : []).sort((a, b) => new Date(b.dateApplied ?? 0) - new Date(a.dateApplied ?? 0));
+                setApplications(sorted);
+                setPostings(Array.isArray(list) ? list : []);
+            })
+            .catch((err) => { if (!cancelled) setError(errorMessage(err, 'Could not load applicants.')); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [companyId, reloadKey]);
 
-    const handleStatusChange = async (applicationId, newStatus) => {
-        setUpdatingId(applicationId);
-        setMessage({ type: '', text: '' });
+    const retry = () => {
+        setLoading(true);
+        setError('');
+        setReloadKey((k) => k + 1);
+    };
 
+    const postingOptions = useMemo(() => {
+        const map = new Map(postings.map((p) => [p.internshipId, p.title]));
+        applications.forEach((a) => {
+            if (a.internship?.internshipId && !map.has(a.internship.internshipId)) map.set(a.internship.internshipId, a.internship.title);
+        });
+        return [...map.entries()].map(([id, title]) => ({ id, title })).sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    }, [postings, applications]);
+
+    const forPosting = useMemo(
+        () => (selectedPosting ? applications.filter((a) => a.internship?.internshipId === selectedPosting) : applications),
+        [applications, selectedPosting],
+    );
+
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return forPosting.filter((a) => (statusTab === 'ALL' || a.status === statusTab) && (!q || (a.student?.name ?? '').toLowerCase().includes(q)));
+    }, [forPosting, statusTab, query]);
+
+    const tabs = [
+        { value: 'ALL', label: 'All', count: forPosting.length },
+        ...APPLICATION_STATUSES.map((s) => ({ value: s, label: STATUS_META[s].label, count: forPosting.filter((a) => a.status === s).length })),
+    ];
+
+    const selected = applications.find((a) => a.applicationId === selectedId) ?? null;
+
+    const onPostingChange = (e) => {
+        const next = new URLSearchParams(searchParams);
+        next.delete('internshipId');
+        if (e.target.value) next.set('internship', e.target.value);
+        else next.delete('internship');
+        setSearchParams(next, { replace: true });
+    };
+
+    const applyStatus = async (application, status) => {
+        setUpdating(status);
         try {
-            await updateApplicationStatus(applicationId, newStatus);
-            setMessage({
-                type: 'success',
-                text: `Application status updated to "${newStatus}" successfully!`
-            });
-            // Refresh list
-            fetchApplications();
+            const updated = await updateApplicationStatus(application.applicationId, status);
+            setApplications((list) => list.map((a) => (a.applicationId === application.applicationId
+                ? { ...a, status, updatedAt: updated?.updatedAt ?? new Date().toISOString() }
+                : a)));
+            toast(`${application.student?.name ?? 'Applicant'} moved to ${STATUS_META[status].label}`, 'success');
+            setConfirm(null);
         } catch (err) {
-            setMessage({ type: 'error', text: 'Failed to update application status.' });
+            toast(errorMessage(err, 'Could not update the status.'), 'error');
         } finally {
-            setUpdatingId(null);
+            setUpdating(null);
         }
     };
 
-    // Inspect Student Profile & Resume
-    const handleViewProfile = async (studentNumber, studentName) => {
-        setLoadingProfile(true);
-        setSelectedProfile(null);
-
-        try {
-            const profile = await getProfileByStudentNumber(studentNumber);
-            setSelectedProfile(profile || { bio: 'No bio provided.', skills: [], resumeLink: '' });
-        } catch (err) {
-            setSelectedProfile({ bio: 'No formal profile created yet.', skills: [], resumeLink: '' });
-        } finally {
-            setLoadingProfile(false);
+    const requestStatus = (application, status) => {
+        if (ACTIONS[status]?.confirm) {
+            setConfirm({ application, status, ...CONFIRM_COPY[status](application.student?.name ?? 'This applicant') });
+        } else {
+            applyStatus(application, status);
         }
     };
 
-    // Filter Applicants
-    const filteredApplications = applications.filter((app) => {
-        const studentName = app.student?.name?.toLowerCase() || '';
-        const studentNum = app.student?.studentNumber?.toLowerCase() || '';
-        const jobTitle = app.internship?.title?.toLowerCase() || '';
-        const search = searchTerm.toLowerCase();
-
-        const matchesSearch = studentName.includes(search) || studentNum.includes(search) || jobTitle.includes(search);
-        const matchesStatus = statusFilter === 'ALL' || app.status?.toUpperCase() === statusFilter;
-
-        return matchesSearch && matchesStatus;
-    });
-
-    // Status Badge UI Helper
-    const getStatusBadge = (status) => {
-        const s = status?.toUpperCase() || 'PENDING';
-        if (s === 'APPROVED' || s === 'ACCEPTED') {
-            return (
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Approved</span>
-        </span>
-            );
-        }
-        if (s === 'REJECTED' || s === 'DECLINED') {
-            return (
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">
-          <XCircle className="w-3.5 h-3.5 text-rose-600" />
-          <span>Declined</span>
-        </span>
-            );
-        }
-        return (
-            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-        <Clock className="w-3.5 h-3.5 text-amber-600" />
-        <span>Pending Review</span>
-      </span>
-        );
-    };
+    const postingTitle = postingOptions.find((p) => p.id === selectedPosting)?.title;
 
     return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        <PageContainer>
+            <PageHeader
+                title="Applicants"
+                subtitle={postingTitle ? `Reviewing applications for ${postingTitle}` : 'Review applications across all of your postings.'}
+            />
 
-            {/* Page Header */}
-            <div className="border-b border-ui-border pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <div className="inline-flex items-center space-x-2 bg-brand-primary/10 border border-brand-accent/20 px-3 py-1 rounded-full text-brand-primary text-xs font-mono font-semibold mb-2">
-                        <Users className="w-3.5 h-3.5 text-brand-accent" />
-                        <span>Candidate Evaluation</span>
-                    </div>
-                    <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-text-main">
-                        Student Applicants
-                    </h1>
-                    <p className="text-text-muted text-xs">
-                        Review incoming student applications, inspect resumes, and manage recruitment decisions.
-                    </p>
+            {error && (
+                <Alert className="mb-6" title="Could not load applicants">
+                    {error} <button onClick={retry} className="underline font-medium cursor-pointer">Try again</button>
+                </Alert>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <Select value={selectedPosting} onChange={onPostingChange} className="sm:max-w-xs" aria-label="Filter by posting">
+                    <option value="">All postings</option>
+                    {postingOptions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </Select>
+                <div className="sm:max-w-xs w-full">
+                    <Input icon={Search} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by student name" aria-label="Search by student name" />
                 </div>
             </div>
 
-            {/* Alert Messages */}
-            {message.text && (
-                <div className={`flex items-center space-x-2 p-4 rounded-xl font-medium text-xs border shadow-sm ${
-                    message.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'
-                }`}>
-                    {message.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />}
-                    <span>{message.text}</span>
-                </div>
-            )}
+            <Tabs tabs={tabs} value={statusTab} onChange={setStatusTab} className="mb-4" />
 
-            {/* Filter and Search Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="relative w-full sm:w-80">
-                    <Search className="w-4 h-4 absolute left-3.5 top-3 text-text-muted" />
-                    <input
-                        type="text"
-                        placeholder="Search by student or role..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-card-bg border border-ui-border rounded-xl pl-10 pr-4 py-2 text-xs text-text-main placeholder-text-muted/60 focus:outline-none focus:border-brand-accent shadow-sm"
+            <Card padding={false}>
+                {loading ? (
+                    <div className="divide-y divide-ui-border">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div key={i} className="flex items-center gap-3 px-5 py-4">
+                                <Skeleton className="w-10 h-10 rounded-full" />
+                                <div className="flex-1 space-y-2"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/2" /></div>
+                            </div>
+                        ))}
+                    </div>
+                ) : visible.length === 0 ? (
+                    <EmptyState
+                        icon={Users}
+                        title={applications.length === 0 ? 'No applications yet' : 'No applicants match these filters'}
+                        description={applications.length === 0
+                            ? 'When students apply to your postings, they will appear here for review.'
+                            : 'Try another status, posting or search term.'}
                     />
-                </div>
-
-                {/* Status Filter Buttons */}
-                <div className="flex gap-1.5 self-start sm:self-auto overflow-x-auto w-full sm:w-auto">
-                    {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((status) => (
-                        <button
-                            key={status}
-                            onClick={() => setStatusFilter(status)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                                statusFilter === status
-                                    ? 'bg-brand-primary text-white shadow-sm'
-                                    : 'bg-card-bg text-text-muted hover:text-text-main border border-ui-border'
-                            }`}
-                        >
-                            {status}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Main Table */}
-            {loading ? (
-                <div className="text-center py-20 space-y-3">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-accent" />
-                    <p className="text-xs text-text-muted">Loading candidate applications...</p>
-                </div>
-            ) : filteredApplications.length === 0 ? (
-                <div className="bg-card-bg border border-ui-border rounded-2xl p-12 text-center space-y-3 shadow-sm">
-                    <FileText className="w-10 h-10 text-text-muted mx-auto opacity-40" />
-                    <h3 className="font-heading font-bold text-text-main text-base">No Applicants Found</h3>
-                    <p className="text-xs text-text-muted max-w-sm mx-auto">
-                        No student applications match your filter criteria.
-                    </p>
-                </div>
-            ) : (
-                <div className="bg-card-bg border border-ui-border rounded-2xl shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs text-text-main">
-                            <thead className="bg-slate-50 text-text-muted font-mono uppercase text-[10px] border-b border-ui-border">
-                            <tr>
-                                <th className="p-4">Candidate Student</th>
-                                <th className="p-4">Applied Position</th>
-                                <th className="p-4">Date Applied</th>
-                                <th className="p-4">Status</th>
-                                <th className="p-4 text-right">Recruitment Decision</th>
-                            </tr>
-                            </thead>
-                            <tbody className="divide-y divide-ui-border">
-                            {filteredApplications.map((app) => {
-                                const isUpdating = updatingId === app.applicationId;
-
-                                return (
-                                    <tr key={app.applicationId} className="hover:bg-slate-50/50 transition-colors">
-
-                                        {/* Candidate Name & ID */}
-                                        <td className="p-4">
-                                            <div className="font-bold text-text-main text-sm">
-                                                {app.student?.name || 'CPUT Student'}
-                                            </div>
-                                            <div className="text-[11px] font-mono text-text-muted mt-0.5">
-                                                ID: {app.student?.studentNumber} • {app.student?.email}
-                                            </div>
-                                            <button
-                                                onClick={() => handleViewProfile(app.student?.studentNumber, app.student?.name)}
-                                                className="mt-1 inline-flex items-center space-x-1 text-[11px] text-brand-accent hover:underline font-semibold cursor-pointer"
-                                            >
-                                                <ExternalLink className="w-3 h-3" />
-                                                <span>View Profile & CV</span>
-                                            </button>
-                                        </td>
-
-                                        {/* Position Title */}
-                                        <td className="p-4">
-                                            <div className="font-semibold text-text-main">
-                                                {app.internship?.title || 'Internship Listing'}
-                                            </div>
-                                            <div className="text-text-muted text-[11px]">
-                                                {app.internship?.location}
-                                            </div>
-                                        </td>
-
-                                        {/* Date */}
-                                        <td className="p-4 font-mono text-text-muted">
-                                            {app.dateApplied ? new Date(app.dateApplied).toLocaleDateString() : 'Recent'}
-                                        </td>
-
-                                        {/* Status */}
-                                        <td className="p-4">
-                                            {getStatusBadge(app.status)}
-                                        </td>
-
-                                        {/* Decision Buttons */}
-                                        <td className="p-4 text-right">
-                                            <div className="flex items-center justify-end space-x-2">
-                                                <button
-                                                    onClick={() => handleStatusChange(app.applicationId, 'Approved')}
-                                                    disabled={isUpdating || app.status?.toUpperCase() === 'APPROVED'}
-                                                    className="inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
-                                                >
-                                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                                    <span>Approve</span>
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleStatusChange(app.applicationId, 'Rejected')}
-                                                    disabled={isUpdating || app.status?.toUpperCase() === 'REJECTED'}
-                                                    className="inline-flex items-center space-x-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
-                                                >
-                                                    <XCircle className="w-3.5 h-3.5" />
-                                                    <span>Decline</span>
-                                                </button>
-                                            </div>
-                                        </td>
-
-                                    </tr>
-                                );
-                            })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* STUDENT PROFILE & RESUME MODAL */}
-            {selectedProfile && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-card-bg border border-ui-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-
-                        <div className="flex justify-between items-center border-b border-ui-border pb-3">
-                            <h3 className="font-heading font-bold text-text-main text-base">Candidate Profile Evaluation</h3>
-                            <button
-                                onClick={() => setSelectedProfile(null)}
-                                className="p-1 text-text-muted hover:text-text-main rounded-lg cursor-pointer"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 text-xs">
-                            <div>
-                                <label className="font-bold text-text-muted uppercase text-[10px] tracking-wider block mb-1">
-                                    Candidate Bio
-                                </label>
-                                <p className="bg-slate-50 border border-ui-border rounded-xl p-3 text-text-main">
-                                    {selectedProfile.bio}
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="font-bold text-text-muted uppercase text-[10px] tracking-wider block mb-1">
-                                    Skills & Tech Stack
-                                </label>
-                                {selectedProfile.skills?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {selectedProfile.skills.map((skill) => (
-                                            <span key={skill} className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-md font-mono text-[11px]">
-                        {skill}
-                      </span>
-                                        ))}
+                ) : (
+                    <ul className="divide-y divide-ui-border">
+                        {visible.map((a) => (
+                            <li key={a.applicationId}>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedId(a.applicationId)}
+                                    className="w-full text-left flex items-center gap-3 px-4 sm:px-5 py-4 hover:bg-slate-50 cursor-pointer"
+                                >
+                                    <Avatar name={a.student?.name} />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium truncate">{a.student?.name ?? 'Student'}</p>
+                                        <p className="text-sm text-text-muted truncate">{a.student?.email}</p>
+                                        <p className="text-sm text-text-muted truncate md:hidden">{a.internship?.title}</p>
                                     </div>
-                                ) : (
-                                    <p className="text-text-muted italic">No skills listed.</p>
-                                )}
-                            </div>
+                                    <div className="hidden md:block min-w-0 w-64">
+                                        <p className="text-sm truncate">{a.internship?.title}</p>
+                                        <p className="text-xs text-text-muted">Applied {timeAgo(a.dateApplied)}</p>
+                                    </div>
+                                    <StatusBadge status={a.status} />
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </Card>
 
-                            <div>
-                                <label className="font-bold text-text-muted uppercase text-[10px] tracking-wider block mb-1">
-                                    Verified Resume / CV
-                                </label>
-                                {selectedProfile.resumeLink ? (
-                                    <a
-                                        href={selectedProfile.resumeLink}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center space-x-1.5 text-brand-accent hover:underline font-semibold bg-brand-primary/5 border border-brand-accent/20 px-3 py-2 rounded-xl"
-                                    >
-                                        <FileText className="w-4 h-4" />
-                                        <span>Open Student Resume PDF</span>
-                                    </a>
-                                ) : (
-                                    <p className="text-text-muted italic">No resume link uploaded.</p>
-                                )}
-                            </div>
-                        </div>
+            <Modal
+                open={!!selected}
+                onClose={() => setSelectedId(null)}
+                title="Application"
+                description={selected?.internship?.title}
+                size="lg"
+            >
+                {selected ? (
+                    <ApplicantDetails
+                        key={selected.applicationId}
+                        application={selected}
+                        onChangeStatus={requestStatus}
+                        updating={confirm ? null : updating}
+                    />
+                ) : <Spinner />}
+            </Modal>
 
-                        <div className="pt-3 border-t border-ui-border flex justify-end">
-                            <button
-                                onClick={() => setSelectedProfile(null)}
-                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-text-main font-semibold rounded-xl text-xs cursor-pointer"
-                            >
-                                Close Preview
-                            </button>
-                        </div>
-
-                    </div>
-                </div>
-            )}
-
-        </div>
+            <ConfirmDialog
+                open={!!confirm}
+                onClose={() => !updating && setConfirm(null)}
+                onConfirm={() => confirm && applyStatus(confirm.application, confirm.status)}
+                title={confirm?.title}
+                message={confirm?.message}
+                confirmLabel={confirm?.confirmLabel}
+                variant={confirm?.variant}
+                loading={!!updating}
+            />
+        </PageContainer>
     );
 }
