@@ -123,8 +123,15 @@ export default function InternshipForm({ values, errors = {}, onChange, plain = 
                     </div>
                 </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Field label="Start date" htmlFor={id('start')}>
-                        <Input id={id('start')} type="date" value={values.startDate} onChange={set('startDate')} />
+                    <Field label="Start date" htmlFor={id('start')} error={errors.startDate}>
+                        <Input
+                            id={id('start')}
+                            type="date"
+                            min={values.deadline || todayIso()}
+                            value={values.startDate}
+                            onChange={set('startDate')}
+                            invalid={!!errors.startDate}
+                        />
                     </Field>
                     <Field label="Duration (months)" htmlFor={id('duration')} error={errors.durationMonths}>
                         <Input id={id('duration')} type="number" min={1} max={24} value={values.durationMonths} onChange={set('durationMonths')} invalid={!!errors.durationMonths} />

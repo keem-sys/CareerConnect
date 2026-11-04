@@ -107,9 +107,10 @@ export default function MyCompanyPostingsPage() {
     }, [saving]);
 
     const originalDeadline = editing?.deadline ? String(editing.deadline).slice(0, 10) : undefined;
+    const originalStartDate = editing?.startDate ? String(editing.startDate).slice(0, 10) : undefined;
 
     const handleSave = async () => {
-        const found = validateInternship(values, { originalDeadline });
+        const found = validateInternship(values, { originalDeadline, originalStartDate });
         setErrors(found);
         if (Object.keys(found).length > 0) return;
         setSaving(true);
@@ -199,7 +200,7 @@ export default function MyCompanyPostingsPage() {
                 {saveError && <Alert className="mb-4">{saveError}</Alert>}
                 {Object.keys(errors).length > 0 && <Alert tone="warning" className="mb-4">Please fix the highlighted fields.</Alert>}
                 {values && (
-                    <InternshipForm values={values} errors={errors} onChange={(next) => { setValues(next); if (Object.keys(errors).length) setErrors(validateInternship(next, { originalDeadline })); }} plain idPrefix="edit" />
+                    <InternshipForm values={values} errors={errors} onChange={(next) => { setValues(next); if (Object.keys(errors).length) setErrors(validateInternship(next, { originalDeadline, originalStartDate })); }} plain idPrefix="edit" />
                 )}
             </Modal>
         </PageContainer>

@@ -15,8 +15,7 @@ import java.util.List;
 
 /*
  * DemoDataSeeder.java
- * Seeds realistic South African demo data so the platform looks alive during presentations.
- * Enabled with careerconnect.demo.seed=true. Idempotent: skips if demo data already exists.
+ * Seeds realistic demo data so the platform
  */
 @Component
 @Order(10)

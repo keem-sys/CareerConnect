@@ -32,10 +32,6 @@ public enum ApplicationStatus {
         return next != null && allowedNext().contains(next);
     }
 
-    /**
-     * Parses a status leniently so rows written by older versions of the app
-     * ("Pending", "Approved", "Interview Scheduled", ...) still load.
-     */
     public static ApplicationStatus fromString(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Application status cannot be empty");

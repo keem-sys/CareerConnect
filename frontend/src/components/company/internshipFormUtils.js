@@ -65,9 +65,9 @@ export const todayIso = () => {
 
 /**
  * Returns an object of field -> message. Empty object means valid.
- * Pass `originalDeadline` when editing so an unchanged past deadline is allowed.
+ * Pass `originalDeadline` and `originalStartDate` when editing so an unchanged past date is allowed.
  */
-export const validateInternship = (values, { originalDeadline } = {}) => {
+export const validateInternship = (values, { originalDeadline, originalStartDate } = {}) => {
     const errors = {};
     if (!values.title.trim()) errors.title = 'Give the internship a title.';
     if (values.description.trim().length < 30) errors.description = 'Describe the role in at least 30 characters.';
@@ -77,6 +77,15 @@ export const validateInternship = (values, { originalDeadline } = {}) => {
     } else if (values.deadline < todayIso() && values.deadline !== originalDeadline) {
         errors.deadline = 'The deadline must be today or later.';
     }
+
+    if (values.startDate) {
+        if (values.startDate < todayIso() && values.startDate !== originalStartDate) {
+            errors.startDate = 'Start date must be today or in the future.';
+        } else if (values.deadline && values.startDate < values.deadline) {
+            errors.startDate = 'Start date cannot be before the application deadline.';
+        }
+    }
+
     if (!values.unpaid && values.stipend !== '' && (Number.isNaN(Number(values.stipend)) || Number(values.stipend) < 0)) {
         errors.stipend = 'Stipend cannot be negative.';
     }
