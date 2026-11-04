@@ -14,17 +14,23 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "Application")
-
 public class Application {
     @Id
     @Column(name = "application_id", nullable = false, unique = true)
     private String applicationId;
 
+    @Convert(converter = ApplicationStatusConverter.class)
     @Column(name = "status", nullable = false)
-    private String status;
+    private ApplicationStatus status;
 
-    @Column(name = "date_applied",  nullable = false)
+    @Column(name = "date_applied", nullable = false)
     private LocalDateTime dateApplied;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "cover_letter", length = 2000)
+    private String coverLetter;
 
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "student_number", nullable = false)
@@ -34,53 +40,43 @@ public class Application {
     @JoinColumn(name = "internship_id", nullable = false)
     private Internship internship;
 
-    protected Application(){
+    protected Application() {
     }
 
     private Application(Builder builder) {
         this.applicationId = builder.applicationId;
         this.status = builder.status;
         this.dateApplied = builder.dateApplied;
+        this.updatedAt = builder.updatedAt;
+        this.coverLetter = builder.coverLetter;
         this.student = builder.student;
         this.internship = builder.internship;
-
     }
 
-    public String getApplicationId() {
-        return applicationId; }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public LocalDateTime getDateApplied() {
-        return dateApplied;
-    }
-
-    public Student getStudent() {
-        return student;
-    }
-
-    public Internship getInternship() {
-        return internship;
-    }
+    public String getApplicationId() { return applicationId; }
+    public ApplicationStatus getStatus() { return status; }
+    public LocalDateTime getDateApplied() { return dateApplied; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public String getCoverLetter() { return coverLetter; }
+    public Student getStudent() { return student; }
+    public Internship getInternship() { return internship; }
 
     @Override
     public String toString() {
         return "Application{" +
                 "applicationId='" + applicationId + '\'' +
-                ", status='" + status + '\'' +
+                ", status=" + status +
                 ", dateApplied=" + dateApplied +
-                ", student=" + student +
-                ", internship=" + internship +
+                ", updatedAt=" + updatedAt +
+                ", student=" + (student == null ? null : student.getStudentNumber()) +
+                ", internship=" + (internship == null ? null : internship.getInternshipId()) +
                 '}';
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Application)) return false;
-        Application that = (Application) o;
+        if (!(o instanceof Application that)) return false;
         return Objects.equals(applicationId, that.applicationId);
     }
 
@@ -92,49 +88,34 @@ public class Application {
     public static class Builder {
 
         private String applicationId;
-        private String status;
+        private ApplicationStatus status;
         private LocalDateTime dateApplied;
+        private LocalDateTime updatedAt;
+        private String coverLetter;
         private Student student;
         private Internship internship;
 
-        public Builder setApplicationId(String applicationId){
-            this.applicationId = applicationId;
-            return this;
-        }
-
-        public Builder setStatus(String status){
-            this.status = status;
-            return this;
-        }
-
-        public Builder setDateApplied(LocalDateTime dateApplied){
-            this.dateApplied = dateApplied;
-            return this;
-        }
-
-        public Builder setStudent(Student student){
-            this.student = student;
-            return this;
-        }
-
-        public Builder setInternship(Internship internship){
-            this.internship = internship;
-            return this;
-        }
+        public Builder setApplicationId(String applicationId) { this.applicationId = applicationId; return this; }
+        public Builder setStatus(ApplicationStatus status) { this.status = status; return this; }
+        public Builder setDateApplied(LocalDateTime dateApplied) { this.dateApplied = dateApplied; return this; }
+        public Builder setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
+        public Builder setCoverLetter(String coverLetter) { this.coverLetter = coverLetter; return this; }
+        public Builder setStudent(Student student) { this.student = student; return this; }
+        public Builder setInternship(Internship internship) { this.internship = internship; return this; }
 
         public Builder copy(Application application) {
             this.applicationId = application.applicationId;
             this.status = application.status;
             this.dateApplied = application.dateApplied;
+            this.updatedAt = application.updatedAt;
+            this.coverLetter = application.coverLetter;
             this.student = application.student;
-            this.internship=application.internship;
+            this.internship = application.internship;
             return this;
         }
 
-        public Application build(){
+        public Application build() {
             return new Application(this);
         }
-
     }
-
 }

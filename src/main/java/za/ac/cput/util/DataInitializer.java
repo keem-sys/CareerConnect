@@ -32,7 +32,7 @@ public class DataInitializer implements CommandLineRunner {
 
             if (systemAdmin != null) {
                 adminRepository.save(systemAdmin);
-                System.out.println(">>> [CareerConnect] Default Admin seeded: " + adminEmail + " / Admin@2026");
+                System.out.println(">>> [CareerConnect] Default Admin seeded: " + adminEmail + " / adminpass123");
             }
         }
     }

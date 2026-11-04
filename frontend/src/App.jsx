@@ -1,7 +1,8 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+import { ToastProvider } from './components/ui/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicOnlyRoute from './components/PublicOnlyRoute';
 import ProfilePage from './pages/ProfilePage';
@@ -24,10 +25,11 @@ import AdminInternshipPage from "./pages/AdminInternshipsPage.jsx";
 export default function App() {
     return (
         <AuthProvider>
+            <ToastProvider>
             <Router>
-                <div className="min-h-screen bg-app-bg text-text-main font-sans selection:bg-brand-accent selection:text-app-bg">
+                <div className="min-h-screen flex flex-col bg-app-bg text-text-main font-sans selection:bg-primary-100">
                     <Navbar />
-                    <main>
+                    <main className="flex-1">
                         <Routes>
                             {/* PUBLIC ROUTES (Anyone can view) */}
                             <Route path="/" element={<HomePage />} />
@@ -45,7 +47,7 @@ export default function App() {
                             {/* STUDENT PROTECTED ROUTES */}
                             <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
                                 <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/settings" element={<AdminStudentPage />} />
+                                <Route path="/settings" element={<Navigate to="/profile" replace />} />
                                 <Route path="/applications" element={<StudentApplicationsPage />} />
                             </Route>
 
@@ -68,8 +70,10 @@ export default function App() {
                             <Route path="*" element={<NotFoundPage />} />
                         </Routes>
                     </main>
+                    <Footer />
                 </div>
             </Router>
+            </ToastProvider>
         </AuthProvider>
     );
 }

@@ -37,6 +37,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 public class ProfileControllerTest {
 
+    @MockitoBean
+    private za.ac.cput.service.JwtService jwtService;
+
+    @MockitoBean
+    private za.ac.cput.security.CustomUserDetailsService customUserDetailsService;
+
     @Autowired
     private MockMvc mockMvc;
     @MockitoBean

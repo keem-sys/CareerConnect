@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import za.ac.cput.domain.Company;
 import za.ac.cput.repository.CompanyRepository;
 
@@ -20,6 +21,9 @@ class CompanyServiceTest {
 
     @Mock
     private CompanyRepository companyRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private CompanyService companyService;
@@ -39,10 +43,14 @@ class CompanyServiceTest {
 
     @Test
     void create() {
-        when(companyRepository.save(company)).thenReturn(company);
+        when(passwordEncoder.encode("encoded-password")).thenReturn("$2a$hashed");
+        when(companyRepository.save(any(Company.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertSame(company, companyService.create(company));
-        verify(companyRepository).save(company);
+        Company result = companyService.create(company);
+        assertNotNull(result);
+        assertEquals("company-1", result.getCompanyId());
+        assertEquals("$2a$hashed", result.getPassword());
+        verify(companyRepository).save(any(Company.class));
     }
 
     @Test
@@ -63,10 +71,14 @@ class CompanyServiceTest {
     void update() {
         Company updated = new Company.Builder().copy(company).setName("Updated Company").build();
         when(companyRepository.existsById("company-1")).thenReturn(true);
-        when(companyRepository.save(updated)).thenReturn(updated);
+        when(companyRepository.findById("company-1")).thenReturn(Optional.of(company));
+        when(passwordEncoder.encode("encoded-password")).thenReturn("$2a$hashed");
+        when(companyRepository.save(any(Company.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertSame(updated, companyService.update(updated));
-        verify(companyRepository).save(updated);
+        Company result = companyService.update(updated);
+        assertEquals("Updated Company", result.getName());
+        assertEquals("$2a$hashed", result.getPassword());
+        verify(companyRepository).save(any(Company.class));
     }
 
     @Test
