@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
@@ -62,21 +64,27 @@ public class ApplicationControllerTest {
 
     @Test
     void create_Success() throws Exception {
-        when(applicationService.apply(any(Student.class), any(Internship.class))).thenReturn(application);
+        when(applicationService.apply(anyString(), anyString())).thenReturn(application);
+        when(applicationService.isStudentOwner(anyString(), anyString())).thenReturn(true);
 
         mockMvc.perform(post("/api/application/create")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(application)))
+                        .content(objectMapper.writeValueAsString(new ApplicationController.ApplicationRequest(
+                                student.getStudentNumber(),
+                                internship.getInternshipId()
+                        )))
+                        .principal(studentAuthentication()))
                 .andExpect(status().isCreated());
 
-        verify(applicationService, times(1)).apply(any(Student.class), any(Internship.class));
+        verify(applicationService, times(1)).apply(anyString(), anyString());
     }
 
     @Test
     void read_Success() throws Exception {
         when(applicationService.read(anyString())).thenReturn(Optional.of(application));
 
-        mockMvc.perform(get("/api/application/read/" + application.getApplicationId()))
+        mockMvc.perform(get("/api/application/read/" + application.getApplicationId())
+                        .principal(adminAuthentication()))
                 .andExpect(status().isOk());
 
         verify(applicationService, times(1)).read(anyString());
@@ -117,7 +125,9 @@ public class ApplicationControllerTest {
     void getByStudent_Success() throws Exception {
         when(applicationService.readByStudent(anyString())).thenReturn(List.of(application));
 
-        mockMvc.perform(get("/api/application/student/" + student.getStudentNumber()))
+        when(applicationService.isStudentOwner(anyString(), anyString())).thenReturn(true);
+        mockMvc.perform(get("/api/application/student/" + student.getStudentNumber())
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk());
 
         verify(applicationService, times(1)).readByStudent(anyString());
@@ -141,5 +151,21 @@ public class ApplicationControllerTest {
                 .andExpect(status().isOk());
 
         verify(applicationService, times(1)).readByStatus(anyString());
+    }
+
+    private UsernamePasswordAuthenticationToken studentAuthentication() {
+        return new UsernamePasswordAuthenticationToken(
+                "student@mycput.ac.za",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))
+        );
+    }
+
+    private UsernamePasswordAuthenticationToken adminAuthentication() {
+        return new UsernamePasswordAuthenticationToken(
+                "admin@mycput.ac.za",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+        );
     }
 }

@@ -14,10 +14,11 @@ import {
     Briefcase,
     Eye,
     EyeOff,
-    Shield
 } from 'lucide-react';
 import { createStudent } from '../services/studentService';
 import { useAuth } from '../context/AuthContext';
+import { createCompany } from '../services/companyService';
+import apiClient from "../services/apiClient.js";
 
 export default function SignupPage() {
     const navigate = useNavigate();
@@ -29,11 +30,9 @@ export default function SignupPage() {
     const [error, setError] = useState('');
     const { login } = useAuth();
 
-    // Password Visibility Toggles
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    // POPIA Consent State
     const [popiaConsent, setPopiaConsent] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -41,7 +40,6 @@ export default function SignupPage() {
         name: '',
         password: '',
         confirmPassword: '',
-        // Company Specific Fields
         companyId: '',
         companyEmail: '',
         industry: ''
@@ -55,13 +53,11 @@ export default function SignupPage() {
         e.preventDefault();
         setError('');
 
-        // 1. POPIA Consent Validation
         if (!popiaConsent) {
             setError('You must accept the POPIA data privacy terms to create an account.');
             return;
         }
 
-        // 2. Password Matching Validation
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match. Please verify your password.');
             return;
@@ -71,35 +67,74 @@ export default function SignupPage() {
 
         try {
             if (role === 'STUDENT') {
-                // Auto-generate official CPUT Student Email
                 const generatedCputEmail = `${formData.studentNumber.trim()}@mycput.ac.za`;
 
                 const studentPayload = {
                     studentNumber: formData.studentNumber.trim(),
                     name: formData.name.trim(),
                     email: generatedCputEmail,
+                    password: formData.password,
+                    confirmPassword: formData.confirmPassword
+                };
+
+                await createStudent(studentPayload);
+
+                const loginResponse = await apiClient.post('/auth/login', {
+                    identifier: generatedCputEmail,
+                    password: formData.password
+                });
+
+                const authData = loginResponse.data;
+                if (authData && authData.token) {
+                    login({
+                        name: authData.name,
+                        id: authData.id,
+                        studentNumber: authData.id, // Mapped universally from authData.id
+                        email: authData.email,
+                        role: authData.role,
+                        token: authData.token
+                    });
+                    navigate(from, { replace: true });
+                } else {
+                    setError('Registration succeeded, but auto-login failed. Please sign in manually.');
+                    navigate('/login');
+                }
+
+            } else {
+                const companyPayload = {
+                    companyId: formData.companyId.trim(),
+                    name: formData.name.trim(),
+                    industry: formData.industry.trim(),
+                    contactEmail: formData.companyEmail.trim(),
                     password: formData.password
                 };
 
-                const result = await createStudent(studentPayload);
+                await createCompany(companyPayload);
 
-                if (result) {
-                    const userSession = {
-                        name: result.name,
-                        studentNumber: result.studentNumber,
-                        email: result.email,
-                        role: 'STUDENT'
-                    };
-                    login(userSession);
+                const loginResponse = await apiClient.post('/auth/login', {
+                    identifier: formData.companyEmail.trim(),
+                    password: formData.password
+                });
+
+                const authData = loginResponse.data;
+                if (authData && authData.token) {
+                    login({
+                        name: authData.name,
+                        id: authData.id,
+                        companyId: authData.id, // Mapped universally from authData.id for companies
+                        email: authData.email,
+                        role: authData.role,
+                        token: authData.token
+                    });
                     navigate(from, { replace: true });
                 } else {
-                    setError('Registration failed. CPUT Student Number may already be registered.');
+                    setError('Registration succeeded, but auto-login failed. Please sign in manually.');
+                    navigate('/login');
                 }
-            } else {
-                setError('Employer registration is coming soon! Please check back shortly.');
             }
         } catch (err) {
-            setError('Could not connect to Spring Boot backend. Ensure server is running.');
+            const errorMsg = err.response?.data || 'Could not connect to Spring Boot backend. Ensure server is running.';
+            setError(typeof errorMsg === 'string' ? errorMsg : 'Registration failed.');
         } finally {
             setLoading(false);
         }

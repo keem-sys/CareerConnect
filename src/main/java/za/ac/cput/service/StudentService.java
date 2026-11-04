@@ -1,6 +1,7 @@
 package za.ac.cput.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder; // Injected
 import org.springframework.stereotype.Service;
 import za.ac.cput.domain.Student;
 import za.ac.cput.dto.request.StudentRegistrationRequest;
@@ -16,17 +17,19 @@ import java.util.Optional;
  * StudentService.java
  * Student Service Implementation
  * Author: Ebenezer Kouakou (230480152)
- * Date: 17 October 2026
+ * Date: 18 October 2026
  */
 
 @Service
 public class StudentService implements IStudentService {
 
     private final StudentRepository studentRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
-    public StudentService(StudentRepository studentRepository) {
+    public StudentService(StudentRepository studentRepository, PasswordEncoder passwordEncoder) {
         this.studentRepository = studentRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -37,15 +40,17 @@ public class StudentService implements IStudentService {
 
         String cputEmail = request.studentNumber().trim() + "@mycput.ac.za";
 
+        String hashedPassword = passwordEncoder.encode(request.password());
+
         Student student = StudentFactory.buildStudent(
                 request.studentNumber().trim(),
                 request.name().trim(),
                 cputEmail,
-                request.password()
+                hashedPassword
         );
 
         if (student == null) {
-            throw new IllegalArgumentException("Invalid registration input fields.");
+            throw new IllegalArgumentException("Invalid registration inputs.");
         }
 
         if (studentRepository.existsById(student.getStudentNumber())) {
@@ -70,7 +75,7 @@ public class StudentService implements IStudentService {
     @Override
     public StudentResponse update(String studentNumber, StudentUpdateRequest request) {
         Student existing = studentRepository.findById(studentNumber)
-                .orElseThrow(() -> new IllegalArgumentException("Student not found with number: " + studentNumber));
+                .orElseThrow(() -> new IllegalArgumentException("Student not found: " + studentNumber));
 
         Student updated = new Student.Builder()
                 .copy(existing)
@@ -111,21 +116,5 @@ public class StudentService implements IStudentService {
                 .stream()
                 .map(StudentResponse::fromEntity)
                 .toList();
-    }
-
-    @Override
-    public StudentResponse authenticate(String identifier, String password) {
-        String searchEmail = identifier.trim().contains("@")
-                ? identifier.trim()
-                : identifier.trim() + "@mycput.ac.za";
-
-        Student student = studentRepository.findByEmail(searchEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid student credentials."));
-
-        if (!student.getPassword().equals(password)) {
-            throw new IllegalArgumentException("Invalid student credentials.");
-        }
-
-        return StudentResponse.fromEntity(student);
     }
 }

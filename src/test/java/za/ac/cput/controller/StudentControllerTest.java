@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
@@ -74,7 +76,8 @@ public class StudentControllerTest {
     void read_Success() throws Exception {
         when(studentService.read("230480152")).thenReturn(studentResponse);
 
-        mockMvc.perform(get("/api/student/read/230480152"))
+        mockMvc.perform(get("/api/student/read/230480152")
+                        .principal(studentAuthentication()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studentNumber").value("230480152"))
                 .andExpect(jsonPath("$.name").value("xholisa"))
@@ -93,7 +96,8 @@ public class StudentControllerTest {
 
         mockMvc.perform(put("/api/student/update/230480152")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updateRequest)))
+                .content(objectMapper.writeValueAsString(updateRequest))
+                .principal(studentAuthentication()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studentNumber").value("230480152"))
                 .andExpect(jsonPath("$.name").value("Peter"))
@@ -132,7 +136,8 @@ public class StudentControllerTest {
         when(studentService.getStudentByEmail("230480152@mycput.ac.za")).thenReturn(Optional.of(studentResponse));
 
         mockMvc.perform(get("/api/student/getByEmail")
-                .param("email", "230480152@mycput.ac.za"))
+                .param("email", "230480152@mycput.ac.za")
+                .principal(studentAuthentication()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studentNumber").value("230480152"))
                 .andExpect(jsonPath("$.name").value("xholisa"))
@@ -157,20 +162,11 @@ public class StudentControllerTest {
         verify(studentService, times(1)).getStudentsByName("xholisa");
     }
 
-    @Test
-    void login_Success() throws Exception {
-        StudentController.LoginRequest loginRequest = new StudentController.LoginRequest("230480152", "pass123");
-        when(studentService.authenticate("230480152", "pass123")).thenReturn(studentResponse);
-
-        mockMvc.perform(post("/api/student/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.studentNumber").value("230480152"))
-                .andExpect(jsonPath("$.name").value("xholisa"))
-                .andExpect(jsonPath("$.email").value("230480152@mycput.ac.za"))
-                .andExpect(jsonPath("$.password").doesNotExist());
-
-        verify(studentService, times(1)).authenticate("230480152", "pass123");
+    private UsernamePasswordAuthenticationToken studentAuthentication() {
+        return new UsernamePasswordAuthenticationToken(
+                "230480152@mycput.ac.za",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))
+        );
     }
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation  } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
     GraduationCap,
     Mail,
@@ -8,8 +8,8 @@ import {
     AlertCircle,
     Loader2,
 } from 'lucide-react';
-import { getStudentByEmail } from '../services/studentService';
-import {useAuth} from "../context/AuthContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import apiClient from "../services/apiClient.js";
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -34,27 +34,31 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            let searchEmail = credentials.email.trim();
-            if (!searchEmail.includes('@')) {
-                searchEmail = `${searchEmail}@mycput.ac.za`;
-            }
+            const response = await apiClient.post('/auth/login', {
+                identifier: credentials.email.trim(),
+                password: credentials.password
+            });
 
-            const student = await getStudentByEmail(searchEmail);
+            const authData = response.data;
 
-            if (student && student.password === credentials.password) {
-                const userSession = {
-                    name: student.name,
-                    studentNumber: student.studentNumber,
-                    email: student.email,
-                    role: 'STUDENT'
-                };
-                login(userSession);
+            if (authData && authData.token) {
+                // Multi-role session storage mapped cleanly from universal authData.id
+                login({
+                    name: authData.name,
+                    id: authData.id,
+                    studentNumber: authData.role === 'STUDENT' ? authData.id : undefined,
+                    companyId: authData.role === 'COMPANY' ? authData.id : undefined,
+                    adminId: authData.role === 'ADMIN' ? authData.id : undefined,
+                    email: authData.email,
+                    role: authData.role,
+                    token: authData.token
+                });
+
                 navigate(from, { replace: true });
-            } else {
-                setError('Invalid credentials. Please check your Student Number/Email and Password.');
             }
         } catch (err) {
-            setError('Could not verify credentials. Ensure Spring Boot backend is running.');
+            const errorMsg = err.response?.data || 'Invalid credentials. Please verify your details.';
+            setError(typeof errorMsg === 'string' ? errorMsg : 'Authentication failed.');
         } finally {
             setLoading(false);
         }
@@ -73,7 +77,6 @@ export default function LoginPage() {
                     <p className="text-text-muted text-xs mt-1">Sign in to your CareerConnect account</p>
                 </div>
 
-
                 {/* Error Banner */}
                 {error && (
                     <div className="flex items-center space-x-2 bg-rose-50 border border-rose-200 text-rose-900 p-3.5 rounded-xl text-xs font-semibold shadow-sm mb-6">
@@ -85,10 +88,10 @@ export default function LoginPage() {
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
 
-                    {/* Email Input */}
+                    {/* Email / Identifier Input */}
                     <div>
                         <label className="block text-xs font-semibold text-text-muted mb-1.5">
-                            CPUT Student Number or Email Address
+                            Email or Student Number / Identifier
                         </label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
@@ -100,7 +103,7 @@ export default function LoginPage() {
                                 value={credentials.email}
                                 autoComplete="off"
                                 onChange={handleChange}
-                                placeholder="240456890@mycput.ac.za"
+                                placeholder="240456890 or hr@company.co.za"
                                 required
                                 className="w-full bg-app-bg border border-ui-border focus:border-brand-accent rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main placeholder-text-muted/60 focus:outline-none focus:ring-1 focus:ring-brand-accent transition-all"
                             />

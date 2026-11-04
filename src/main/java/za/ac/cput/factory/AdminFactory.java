@@ -1,19 +1,27 @@
-
 package za.ac.cput.factory;
 
 import za.ac.cput.domain.Admin;
+import za.ac.cput.util.Helper;
+
+import java.util.UUID;
 
 /*
  * AdminFactory.java
- * Admin factory class
+ * Factory for creating verified Admin entities
  * Author: Magdeline Malahlela (240281721)
- * Date: 19 March 2026
+ * Date: 19 March 2026 (Updated: October 2026)
  */
-
 public class AdminFactory {
 
+    /**
+     * Creates an Admin with a designated ID (e.g., from DB or system config)
+     */
     public static Admin createAdmin(String adminId, String name, String email, String password) {
-        if (isNullOrEmpty(adminId) || isNullOrEmpty(name) || isNullOrEmpty(email) || isNullOrEmpty(password)) {
+        if (Helper.isEmptyOrNull(adminId) || Helper.isEmptyOrNull(name) || Helper.isEmptyOrNull(password)) {
+            return null;
+        }
+
+        if (!Helper.isValidEmail(email)) {
             return null;
         }
 
@@ -25,7 +33,8 @@ public class AdminFactory {
                 .build();
     }
 
-    private static boolean isNullOrEmpty(String value) {
-        return value == null || value.trim().isEmpty();
+    public static Admin createAdmin(String name, String email, String password) {
+        String generatedAdminId = "ADM-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return createAdmin(generatedAdminId, name, email, password);
     }
 }

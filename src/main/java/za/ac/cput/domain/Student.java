@@ -1,23 +1,35 @@
 package za.ac.cput.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.util.Objects;
 
 /*
  * Student.java
- * Student entity class
+ * Security-hardened Student entity
  * Author: Ebenezer Kouakou (230480152)
- * Date: 10 June 2026
+ * Date: 18 October 2026
  */
 
 @Entity
+@Table(name = "student")
 public class Student {
 
     @Id
+    @Column(name = "student_number", nullable = false, unique = true)
     private String studentNumber;
+
+    @Column(name = "name", nullable = false)
     private String name;
+
+    @Column(name = "email", nullable = false, unique = true)
     private String email;
+
+    @Column(name = "password", nullable = false)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     protected Student() {
@@ -52,7 +64,7 @@ public class Student {
                 "studentNumber='" + studentNumber + '\'' +
                 ", name='" + name + '\'' +
                 ", email='" + email + '\'' +
-                ", password='" + password + '\'' +
+                ", password='[PROTECTED]'" +
                 '}';
     }
 
@@ -61,15 +73,12 @@ public class Student {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Student student = (Student) o;
-        return Objects.equals(studentNumber, student.studentNumber) &&
-                Objects.equals(name, student.name) &&
-                Objects.equals(email, student.email) &&
-                Objects.equals(password, student.password);
+        return Objects.equals(studentNumber, student.studentNumber);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(studentNumber, name, email, password);
+        return Objects.hash(studentNumber);
     }
 
     public static class Builder {

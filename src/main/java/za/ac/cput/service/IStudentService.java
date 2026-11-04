@@ -15,5 +15,4 @@ public interface IStudentService {
     List<StudentResponse> getAll();
     Optional<StudentResponse> getStudentByEmail(String email);
     List<StudentResponse> getStudentsByName(String name);
-    StudentResponse authenticate(String identifier, String password);
 }

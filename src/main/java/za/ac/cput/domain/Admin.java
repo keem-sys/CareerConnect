@@ -1,20 +1,39 @@
 /*
  * Admin.java
- * Admin entity class
+ * Security-hardened Admin entity class
  * Author: Magdeline Malahlela (240281721)
- * Date: 18 March 2026
+ * Date: 18 March 2026 (Updated: October 2026)
  */
 
 package za.ac.cput.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.util.Objects;
 
+@Entity
+@Table(name = "admin")
 public class Admin {
 
-    private final String adminId;
-    private final String name;
-    private final String email;
-    private final String password;
+    @Id
+    @Column(name = "admin_id", nullable = false, unique = true)
+    private String adminId;
+
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    @Column(name = "email", nullable = false, unique = true)
+    private String email;
+
+    @Column(name = "password", nullable = false)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String password;
+
+    protected Admin() {
+    }
 
     private Admin(Builder builder) {
         this.adminId = builder.adminId;
@@ -45,7 +64,7 @@ public class Admin {
                 "adminId='" + adminId + '\'' +
                 ", name='" + name + '\'' +
                 ", email='" + email + '\'' +
-                ", password='" + password + '\'' +
+                ", password='[PROTECTED]'" +
                 '}';
     }
 

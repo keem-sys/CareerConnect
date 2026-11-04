@@ -1,13 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-
-// Components & Guards
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicOnlyRoute from './components/PublicOnlyRoute';
-
-// Pages
 import ProfilePage from './pages/ProfilePage';
 import AdminStudentPage from './pages/AdminStudentPage';
 import SignupPage from './pages/SignupPage';
@@ -16,6 +12,14 @@ import PostInternshipPage from './pages/PostInternshipPage';
 import NotFoundPage from './pages/NotFoundPage';
 import BrowseInternshipsPage from "./pages/BrowseInternshipsPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
+import StudentApplicationsPage from "./pages/StudentApplicationsPage.jsx";
+import CompanyDirectoryPage from "./pages/CompanyDirectoryPage.jsx";
+import CompanyProfilePage from "./pages/CompanyProfilePage.jsx";
+import MyCompanyPostingsPage from "./pages/MyCompanyPostingsPage.jsx";
+import CompanyApplicantsPage from "./pages/CompanyApplicantsPage.jsx";
+import InternshipDetailsPage from "./pages/InternshipDetailsPage.jsx";
+import AdminCompanyPage from "./pages/AdminCompanyPage.jsx";
+import AdminInternshipPage from "./pages/AdminInternshipsPage.jsx";
 
 export default function App() {
     return (
@@ -29,8 +33,10 @@ export default function App() {
                             <Route path="/" element={<HomePage />} />
                             <Route path="/dashboard" element={<Navigate to="/" replace />} />
                             <Route path="/internships" element={<BrowseInternshipsPage />} />
+                            <Route path="/internships/:id" element={<InternshipDetailsPage />} />
+                            <Route path="/companies" element={<CompanyDirectoryPage />} />
 
-                            {/* GUEST-ONLY ROUTES (Redirects logged-in users to /) */}
+                            {/* GUEST-ONLY ROUTES */}
                             <Route element={<PublicOnlyRoute />}>
                                 <Route path="/login" element={<LoginPage />} />
                                 <Route path="/signup" element={<SignupPage />} />
@@ -40,16 +46,22 @@ export default function App() {
                             <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/settings" element={<AdminStudentPage />} />
+                                <Route path="/applications" element={<StudentApplicationsPage />} />
                             </Route>
 
                             {/* EMPLOYER PROTECTED ROUTES */}
                             <Route element={<ProtectedRoute allowedRoles={['COMPANY']} />}>
+                                <Route path="/company/postings" element={<MyCompanyPostingsPage />} />
                                 <Route path="/internships/new" element={<PostInternshipPage />} />
+                                <Route path="/company/applicants" element={<CompanyApplicantsPage />} />
+                                <Route path="/company/profile" element={<CompanyProfilePage />} />
                             </Route>
 
                             {/* ADMIN PROTECTED ROUTES */}
                             <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                                 <Route path="/admin/students" element={<AdminStudentPage />} />
+                                <Route path="/admin/companies" element={<AdminCompanyPage />} />
+                                <Route path="/admin/internships" element={<AdminInternshipPage />} />
                             </Route>
 
                             {/* 404 CATCH-ALL */}
