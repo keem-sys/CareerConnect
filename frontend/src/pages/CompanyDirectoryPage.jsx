@@ -1,132 +1,144 @@
-import React, { useState, useEffect } from 'react';
-import { getAllCompanies, getCompaniesByIndustry } from '../services/companyService';
-import { Building2, Search, Briefcase, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Building2, Briefcase, ChevronRight } from 'lucide-react';
+import {
+    Alert, Button, Card, CompanyLogo, EmptyState, Input, PageContainer, PageHeader, Select, Skeleton,
+} from '../components/ui';
+import { getAllCompanies } from '../services/companyService';
+import { searchInternships } from '../services/internshipService';
+import { errorMessage } from '../lib/format';
 
 export default function CompanyDirectoryPage() {
+    const navigate = useNavigate();
     const [companies, setCompanies] = useState([]);
+    const [openCounts, setOpenCounts] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const fetchCompanies = async () => {
-        try {
-            const data = await getAllCompanies();
-            setCompanies(data);
-        } catch (err) {
-            setError('Failed to load partner companies. Ensure Spring Boot is running.');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [reloadToken, setReloadToken] = useState(0);
+    const [search, setSearch] = useState('');
+    const [industry, setIndustry] = useState('');
 
     useEffect(() => {
-        fetchCompanies();
-    }, []);
+        let cancelled = false;
+        Promise.all([
+            getAllCompanies(),
+            searchInternships({ openOnly: true }).catch(() => []),
+        ])
+            .then(([companyData, internships]) => {
+                if (cancelled) return;
+                const counts = {};
+                (internships ?? []).forEach((i) => {
+                    counts[i.companyId] = (counts[i.companyId] ?? 0) + 1;
+                });
+                setCompanies(Array.isArray(companyData) ? companyData : []);
+                setOpenCounts(counts);
+                setError('');
+            })
+            .catch((err) => { if (!cancelled) setError(errorMessage(err, 'Could not load companies.')); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [reloadToken]);
 
-    const filteredCompanies = companies.filter((comp) => {
-        const name = comp.name?.toLowerCase() || '';
-        const industry = comp.industry?.toLowerCase() || '';
-        const search = searchTerm.toLowerCase();
-        return name.includes(search) || industry.includes(search);
-    });
+    const industries = useMemo(
+        () => [...new Set(companies.map((c) => c.industry).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+        [companies],
+    );
+
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return companies
+            .filter((c) => !industry || c.industry === industry)
+            .filter((c) => !term || c.name?.toLowerCase().includes(term) || c.industry?.toLowerCase().includes(term))
+            .sort((a, b) => (openCounts[b.companyId] ?? 0) - (openCounts[a.companyId] ?? 0) || (a.name ?? '').localeCompare(b.name ?? ''));
+    }, [companies, search, industry, openCounts]);
+
+    const retry = () => {
+        setLoading(true);
+        setError('');
+        setReloadToken((n) => n + 1);
+    };
 
     return (
-        <div className="min-h-[calc(100vh-5rem)] bg-app-bg p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl space-y-6">
+        <PageContainer>
+            <PageHeader title="Companies" subtitle="Explore the employers hiring interns on CareerConnect." />
 
-                {/* Header */}
-                <div className="border-b border-ui-border pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <div className="inline-flex items-center space-x-2 bg-brand-primary/10 border border-brand-accent/20 px-3 py-1 rounded-full text-brand-accent text-xs font-mono font-semibold mb-2">
-                            <Building2 className="w-3.5 h-3.5" />
-                            <span>Industry Partners</span>
-                        </div>
-                        <h1 className="text-3xl font-extrabold text-text-main font-heading">
-                            Verified Hiring Companies
-                        </h1>
-                        <p className="mt-1 text-xs text-text-muted">
-                            Explore registered technology partners offering Work-Integrated Learning (WIL) opportunities for CPUT students.
-                        </p>
-                    </div>
-
-                    {/* Search Bar */}
-                    <div className="relative w-full md:w-72">
-                        <Search className="w-4 h-4 absolute left-3.5 top-3 text-text-muted" />
-                        <input
-                            type="text"
-                            placeholder="Search by company or industry..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-card-bg border border-ui-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-main placeholder-text-muted/60 focus:outline-none focus:border-brand-accent shadow-sm"
-                        />
-                    </div>
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <div className="flex-1">
+                    <label htmlFor="company-search" className="sr-only">Search companies</label>
+                    <Input id="company-search" icon={Search} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by company name or industry" />
                 </div>
-
-                {/* Loading State */}
-                {loading && (
-                    <div className="text-center py-16 space-y-3">
-                        <Loader2 className="w-8 h-8 animate-spin mx-auto text-brand-accent" />
-                        <p className="text-xs text-text-muted">Loading partner companies...</p>
-                    </div>
-                )}
-
-                {/* Error State */}
-                {error && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-900 flex items-center space-x-2">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                        <span>{error}</span>
-                    </div>
-                )}
-
-                {/* Empty State */}
-                {!loading && !error && filteredCompanies.length === 0 && (
-                    <div className="rounded-2xl border border-ui-border bg-card-bg p-12 text-center space-y-2 shadow-sm">
-                        <Building2 className="w-8 h-8 text-text-muted mx-auto opacity-50" />
-                        <h3 className="font-heading font-bold text-text-main text-sm">No Companies Found</h3>
-                        <p className="text-xs text-text-muted max-w-sm mx-auto">
-                            No registered corporate partners match your search criteria.
-                        </p>
-                    </div>
-                )}
-
-                {/* Company Cards Grid */}
-                {!loading && !error && filteredCompanies.length > 0 && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {filteredCompanies.map((company) => (
-                            <div
-                                key={company.companyId}
-                                className="rounded-2xl border border-ui-border bg-card-bg p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between space-y-4"
-                            >
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div className="w-10 h-10 rounded-xl bg-brand-primary/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">
-                                            {company.name ? company.name.substring(0, 2).toUpperCase() : 'CO'}
-                                        </div>
-                                        <span className="font-mono text-[10px] text-text-muted bg-app-bg border border-ui-border px-2 py-0.5 rounded-md">
-                      ID: {company.companyId}
-                    </span>
-                                    </div>
-
-                                    <div>
-                                        <h2 className="text-lg font-bold text-text-main font-heading">
-                                            {company.name}
-                                        </h2>
-                                        <span className="inline-block mt-1 font-mono text-[11px] font-semibold text-brand-primary bg-brand-primary/5 border border-brand-primary/10 px-2 py-0.5 rounded">
-                      {company.industry}
-                    </span>
-                                    </div>
-                                </div>
-
-                                <div className="pt-4 border-t border-ui-border text-xs flex items-center space-x-2 text-text-muted">
-                                    <Mail className="w-3.5 h-3.5 text-brand-accent shrink-0" />
-                                    <span className="truncate">{company.contactEmail}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
+                <div className="sm:w-60">
+                    <label htmlFor="company-industry" className="sr-only">Industry</label>
+                    <Select id="company-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}>
+                        <option value="">All industries</option>
+                        {industries.map((i) => <option key={i} value={i}>{i}</option>)}
+                    </Select>
+                </div>
             </div>
-        </div>
+
+            {error ? (
+                <Alert title="We couldn't load companies">
+                    <p className="mt-1">{error}</p>
+                    <Button size="sm" variant="secondary" className="mt-3" onClick={retry}>Try again</Button>
+                </Alert>
+            ) : loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Card key={i} className="flex items-center gap-4">
+                            <Skeleton className="w-11 h-11 rounded-lg" />
+                            <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-2/3" />
+                                <Skeleton className="h-3.5 w-1/2" />
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            ) : filtered.length === 0 ? (
+                <Card padding={false}>
+                    <EmptyState
+                        icon={Building2}
+                        title={companies.length === 0 ? 'No companies yet' : 'No companies match your search'}
+                        description={companies.length === 0 ? 'Employers will appear here once they register.' : 'Try another name or choose a different industry.'}
+                        action={companies.length > 0 ? <Button variant="secondary" onClick={() => { setSearch(''); setIndustry(''); }}>Clear filters</Button> : null}
+                    />
+                </Card>
+            ) : (
+                <>
+                    <p className="text-sm text-text-muted mb-4">
+                        <span className="font-semibold text-text-main">{filtered.length}</span> {filtered.length === 1 ? 'company' : 'companies'}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filtered.map((c) => {
+                            const count = openCounts[c.companyId] ?? 0;
+                            return (
+                                <button
+                                    key={c.companyId}
+                                    type="button"
+                                    onClick={() => navigate(`/internships?q=${encodeURIComponent(c.name ?? '')}`)}
+                                    className="group text-left bg-card-bg border border-ui-border rounded-xl p-5 shadow-(--shadow-card) transition hover:border-primary-200 hover:shadow-(--shadow-pop) cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <CompanyLogo name={c.name} />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-semibold text-text-main truncate group-hover:text-primary-700">{c.name}</p>
+                                            <p className="text-sm text-text-muted truncate">{c.industry || 'Industry not specified'}</p>
+                                        </div>
+                                        <ChevronRight className="w-5 h-5 text-text-subtle shrink-0 group-hover:text-primary-600" />
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-ui-border flex items-center gap-1.5 text-sm">
+                                        <Briefcase className="w-4 h-4 text-text-subtle" />
+                                        {count > 0 ? (
+                                            <span className="font-medium text-primary-700">{count} open internship{count === 1 ? '' : 's'}</span>
+                                        ) : (
+                                            <span className="text-text-muted">No open internships</span>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+        </PageContainer>
     );
 }

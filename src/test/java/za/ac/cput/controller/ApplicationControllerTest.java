@@ -12,8 +12,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 import za.ac.cput.domain.Application;
+import za.ac.cput.domain.ApplicationStatus;
 import za.ac.cput.domain.Internship;
 import za.ac.cput.domain.Student;
+import za.ac.cput.repository.CompanyRepository;
 import za.ac.cput.service.ApplicationService;
 
 import java.time.LocalDateTime;
@@ -31,10 +33,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 public class ApplicationControllerTest {
 
+    @MockitoBean
+    private za.ac.cput.service.JwtService jwtService;
+
+    @MockitoBean
+    private za.ac.cput.security.CustomUserDetailsService customUserDetailsService;
+
     @Autowired
     private MockMvc mockMvc;
     @MockitoBean
     private ApplicationService applicationService;
+    @MockitoBean
+    private CompanyRepository companyRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -56,7 +66,7 @@ public class ApplicationControllerTest {
 
         application = new Application.Builder()
                 .setApplicationId("APP-001")
-                .setStatus("Pending")
+                .setStatus(ApplicationStatus.PENDING)
                 .setStudent(student)
                 .setInternship(internship)
                 .build();
@@ -64,7 +74,7 @@ public class ApplicationControllerTest {
 
     @Test
     void create_Success() throws Exception {
-        when(applicationService.apply(anyString(), anyString())).thenReturn(application);
+        when(applicationService.apply(anyString(), anyString(), any())).thenReturn(application);
         when(applicationService.isStudentOwner(anyString(), anyString())).thenReturn(true);
 
         mockMvc.perform(post("/api/application/create")
@@ -76,7 +86,7 @@ public class ApplicationControllerTest {
                         .principal(studentAuthentication()))
                 .andExpect(status().isCreated());
 
-        verify(applicationService, times(1)).apply(anyString(), anyString());
+        verify(applicationService, times(1)).apply(anyString(), anyString(), any());
     }
 
     @Test
@@ -92,13 +102,14 @@ public class ApplicationControllerTest {
 
     @Test
     void updateStatus_Success() throws Exception {
-        when(applicationService.updateStatus(anyString(), anyString())).thenReturn(application);
+        when(applicationService.read(anyString())).thenReturn(Optional.of(application));
+        when(applicationService.updateStatus(anyString(), any(ApplicationStatus.class))).thenReturn(application);
 
         mockMvc.perform(put("/api/application/update/" + application.getApplicationId())
                         .param("status", "Accepted"))
                 .andExpect(status().isOk());
 
-        verify(applicationService, times(1)).updateStatus(anyString(), anyString());
+        verify(applicationService, times(1)).updateStatus("APP-001", ApplicationStatus.ACCEPTED);
     }
 
     @Test
@@ -137,7 +148,8 @@ public class ApplicationControllerTest {
     void getByInternship_Success() throws Exception {
         when(applicationService.readByInternship(anyString())).thenReturn(List.of(application));
 
-        mockMvc.perform(get("/api/application/internship/" + internship.getInternshipId()))
+        mockMvc.perform(get("/api/application/internship/" + internship.getInternshipId())
+                        .principal(adminAuthentication()))
                 .andExpect(status().isOk());
 
         verify(applicationService, times(1)).readByInternship(anyString());
@@ -145,12 +157,12 @@ public class ApplicationControllerTest {
 
     @Test
     void getByStatus_Success() throws Exception {
-        when(applicationService.readByStatus(anyString())).thenReturn(List.of(application));
+        when(applicationService.readByStatus(any(ApplicationStatus.class))).thenReturn(List.of(application));
 
-        mockMvc.perform(get("/api/application/status/" + application.getStatus()))
+        mockMvc.perform(get("/api/application/status/" + application.getStatus().name()))
                 .andExpect(status().isOk());
 
-        verify(applicationService, times(1)).readByStatus(anyString());
+        verify(applicationService, times(1)).readByStatus(ApplicationStatus.PENDING);
     }
 
     private UsernamePasswordAuthenticationToken studentAuthentication() {

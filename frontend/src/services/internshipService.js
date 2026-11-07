@@ -83,3 +83,20 @@ export const getInternshipsByCompany = async (companyId) => {
         throw error.response?.data || "Failed to fetch company internships.";
     }
 };
+
+/**
+ * Server-side search. All params optional:
+ * { q, location, workMode: 'ONSITE'|'HYBRID'|'REMOTE', field, paidOnly, openOnly, sort: 'newest'|'deadline'|'stipend'|'title', limit }
+ * Returns InternshipResponse[] (includes companyName, companyIndustry, open, applicantCount).
+ */
+export const searchInternships = async (params = {}) => {
+    const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== false));
+    const response = await apiClient.get('/internship/search', { params: clean });
+    return response.data;
+};
+
+/** Enriched single internship (InternshipResponse). */
+export const getInternshipDetails = async (internshipId) => {
+    const response = await apiClient.get(`/internship/details/${internshipId}`);
+    return response.data;
+};

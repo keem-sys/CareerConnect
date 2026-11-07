@@ -20,7 +20,8 @@ class CompanyFactoryTest {
                 "C001",
                 "CareerConnect",
                 "Technology",
-                "222954396@mycput.ac.za"
+                "222954396@mycput.ac.za",
+                "securePass123"
         );
 
         assertNotNull(company);
@@ -34,7 +35,8 @@ class CompanyFactoryTest {
                 null,
                 "CareerConnect",
                 "Technology",
-                "222954396@mycput.ac.za"
+                "222954396@mycput.ac.za",
+                "securePass123"
         );
 
         assertNull(company);
@@ -46,7 +48,8 @@ class CompanyFactoryTest {
                 "",
                 "CareerConnect",
                 "Technology",
-                "222954396@mycput.ac.za"
+                "222954396@mycput.ac.za",
+                "securePass123"
         );
 
         assertNull(company);

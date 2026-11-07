@@ -10,7 +10,7 @@ import org.apache.commons.validator.routines.EmailValidator;
  */
 public class Helper {
     public static boolean isEmptyOrNull(String str) {
-        if (str == null || str.isEmpty()) {
+        if (str == null || str.isBlank()) {
             return true;
         }
         return false;

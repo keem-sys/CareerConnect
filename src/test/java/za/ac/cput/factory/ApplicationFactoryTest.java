@@ -2,14 +2,13 @@ package za.ac.cput.factory;
 
 import org.junit.jupiter.api.Test;
 import za.ac.cput.domain.Application;
-import za.ac.cput.domain.Student;
+import za.ac.cput.domain.ApplicationStatus;
 import za.ac.cput.domain.Internship;
-import za.ac.cput.factory.ApplicationFactory;
+import za.ac.cput.domain.Student;
 
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ApplicationFactoryTest {
 
@@ -29,35 +28,37 @@ class ApplicationFactoryTest {
             .build();
 
     @Test
-    void createApplication(){
-        Application application = ApplicationFactory.createApplication("APP001", student, internship);
+    void createApplication_startsAsPending() {
+        Application application = ApplicationFactory.createApplication(student, internship);
         assertNotNull(application);
-        System.out.println(application);
+        assertNotNull(application.getApplicationId());
+        assertEquals(ApplicationStatus.PENDING, application.getStatus());
+        assertNotNull(application.getDateApplied());
+        assertNull(application.getCoverLetter());
     }
 
     @Test
-    void createApplicationWithNullId(){
-        Application application = ApplicationFactory.createApplication(null,  student, internship);
-        assertNull(application);
+    void createApplication_keepsTrimmedCoverLetter() {
+        Application application = ApplicationFactory.createApplication(student, internship, "  I love Java.  ");
+        assertEquals("I love Java.", application.getCoverLetter());
     }
+
     @Test
-    void createApplicationWithEmptyStatus(){
-        Application application = ApplicationFactory.createApplication("APP002", student, internship);
-        assertNull(application);
+    void createApplication_rejectsOverlongCoverLetter() {
+        String tooLong = "a".repeat(ApplicationFactory.MAX_COVER_LETTER_LENGTH + 1);
+        assertThrows(IllegalArgumentException.class,
+                () -> ApplicationFactory.createApplication(student, internship, tooLong));
     }
-    @Test
-    void createApplicationWithNullDate(){
-        Application application = ApplicationFactory.createApplication("APP003", student, internship);
-        assertNull(application);
-    }
+
     @Test
     void createApplicationWithNullStudent() {
-        Application application = ApplicationFactory.createApplication("APP004", null, internship);
-        assertNull(application);
+        assertThrows(IllegalArgumentException.class,
+                () -> ApplicationFactory.createApplication(null, internship));
     }
+
     @Test
-    void createApplicationWithNullInternship(){
-        Application application = ApplicationFactory.createApplication("APP005", student, null);
-        assertNull(application);
+    void createApplicationWithNullInternship() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ApplicationFactory.createApplication(student, null));
     }
 }

@@ -36,6 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 public class StudentControllerTest {
 
+    @MockitoBean
+    private za.ac.cput.service.JwtService jwtService;
+
+    @MockitoBean
+    private za.ac.cput.security.CustomUserDetailsService customUserDetailsService;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -84,14 +90,15 @@ public class StudentControllerTest {
                 .andExpect(jsonPath("$.email").value("230480152@mycput.ac.za"))
                 .andExpect(jsonPath("$.password").doesNotExist());
 
-        verify(studentService, times(1)).read("230480152");
+        verify(studentService, atLeastOnce()).read("230480152");
     }
 
     @Test
     void update_Success() throws Exception {
-        StudentUpdateRequest updateRequest = new StudentUpdateRequest("Peter", "peter@gmail.com");
-        StudentResponse updatedResponse = new StudentResponse("230480152", "Peter", "peter@gmail.com");
+        StudentUpdateRequest updateRequest = new StudentUpdateRequest("Peter", "230480152@mycput.ac.za");
+        StudentResponse updatedResponse = new StudentResponse("230480152", "Peter", "230480152@mycput.ac.za");
 
+        when(studentService.read("230480152")).thenReturn(studentResponse);
         when(studentService.update(eq("230480152"), any(StudentUpdateRequest.class))).thenReturn(updatedResponse);
 
         mockMvc.perform(put("/api/student/update/230480152")
@@ -101,7 +108,7 @@ public class StudentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studentNumber").value("230480152"))
                 .andExpect(jsonPath("$.name").value("Peter"))
-                .andExpect(jsonPath("$.email").value("peter@gmail.com"))
+                .andExpect(jsonPath("$.email").value("230480152@mycput.ac.za"))
                 .andExpect(jsonPath("$.password").doesNotExist());
 
         verify(studentService, times(1)).update(eq("230480152"), any(StudentUpdateRequest.class));

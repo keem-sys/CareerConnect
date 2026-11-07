@@ -1,420 +1,336 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { readInternship } from '../services/internshipService';
-import { readCompany } from '../services/companyService';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import {
+    ArrowLeft, MapPin, Briefcase, CalendarClock, Users, Wallet, Clock, CalendarDays,
+    UserCheck, Building2, CheckCircle2, Lock, SearchX,
+} from 'lucide-react';
+import {
+    Alert, Badge, Button, Card, CompanyLogo, EmptyState, Modal, PageContainer, Skeleton,
+    StatusBadge, Textarea, Field, cx,
+} from '../components/ui';
+import { useToast } from '../components/ui/Toast';
+import { useAuth } from '../context/AuthContext.jsx';
+import { getInternshipDetails } from '../services/internshipService';
 import { applyForInternship, getStudentApplications } from '../services/applicationService';
 import {
-    Briefcase,
-    MapPin,
-    Calendar,
-    Building2,
-    ArrowLeft,
-    CheckCircle2,
-    AlertCircle,
-    Loader2,
-    ShieldCheck,
-    GraduationCap,
-    Copy,
-} from 'lucide-react';
+    daysUntil, deadlineLabel, errorMessage, formatDate, formatStipend, timeAgo, workModeLabel,
+} from '../lib/format';
+
+const COVER_LETTER_MAX = 2000;
 
 export default function InternshipDetailsPage() {
     const { id } = useParams();
-    const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
+    const { toast } = useToast();
 
-    const [internship, setInternship] = useState(null);
-    const [company, setCompany] = useState(null);
-    const [hasApplied, setHasApplied] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [applying, setApplying] = useState(false);
-    const [error, setError] = useState('');
-    const [feedback, setFeedback] = useState(null);
-    const [copied, setCopied] = useState(false);
+    const [state, setState] = useState({ id: null, internship: null, error: '', notFound: false });
+    const [application, setApplication] = useState({ id: null, value: null });
+    const [modalOpen, setModalOpen] = useState(false);
+    const [coverLetter, setCoverLetter] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [applyError, setApplyError] = useState('');
+
+    const isStudent = user?.role === 'STUDENT';
 
     useEffect(() => {
-        const fetchDetails = async () => {
-            try {
-                const job = await readInternship(id);
-                if (!job) {
-                    setError('The requested internship could not be found.');
-                    return;
-                }
-                setInternship(job);
-
-                if (job.companyId) {
-                    try {
-                        const compData = await readCompany(job.companyId);
-                        setCompany(compData);
-                    } catch (compErr) {
-                        console.warn('Could not fetch company details:', compErr);
-                    }
-                }
-
-                // 3. Check if current student has already applied
-                if (user?.role === 'STUDENT' && user.studentNumber) {
-                    try {
-                        const myApps = await getStudentApplications(user.studentNumber);
-                        const alreadyApplied = myApps.some(
-                            (app) => (app.internship?.internshipId || app.internship?.id) === id
-                        );
-                        setHasApplied(alreadyApplied);
-                    } catch (appErr) {
-                        console.warn('Could not check application status:', appErr);
-                    }
-                }
-            } catch (err) {
-                console.error(err);
-                setError('Failed to load internship details. Please ensure the server is running.');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDetails();
-    }, [id, user]);
-
-    const handleApply = async () => {
-        setFeedback(null);
-
-        if (!user) {
-            setFeedback({
-                type: 'error',
-                text: 'Please sign in with your CPUT student account to apply.'
+        let cancelled = false;
+        getInternshipDetails(id)
+            .then((data) => { if (!cancelled) setState({ id, internship: data, error: '', notFound: !data }); })
+            .catch((err) => {
+                if (cancelled) return;
+                const status = err?.response?.status;
+                setState({ id, internship: null, notFound: status === 404 || status === 400, error: errorMessage(err, 'Could not load this internship.') });
             });
-            return;
-        }
+        return () => { cancelled = true; };
+    }, [id]);
 
-        if (user.role !== 'STUDENT') {
-            setFeedback({
-                type: 'error',
-                text: 'Only registered CPUT students can apply for WIL internship opportunities.'
-            });
-            return;
-        }
+    useEffect(() => {
+        if (!isStudent) return undefined;
+        let cancelled = false;
+        getStudentApplications(user.id)
+            .then((apps) => {
+                if (cancelled) return;
+                const match = (apps ?? []).find((a) => String(a.internship?.internshipId) === String(id));
+                setApplication({ id, value: match ?? null });
+            })
+            .catch(() => { if (!cancelled) setApplication({ id, value: null }); });
+        return () => { cancelled = true; };
+    }, [id, isStudent, user?.id]);
 
-        if (internship.deadline && new Date(internship.deadline) < new Date()) {
-            setFeedback({
-                type: 'error',
-                text: 'Applications for this position have closed.'
-            });
-            return;
-        }
+    const loading = state.id !== id;
 
-        setApplying(true);
+    if (loading) return <DetailsSkeleton />;
+
+    if (state.notFound || (!state.internship && !state.error)) {
+        return (
+            <PageContainer>
+                <BackLink />
+                <Card padding={false}>
+                    <EmptyState
+                        icon={SearchX}
+                        title="Internship not found"
+                        description="This internship may have been removed or the link is incorrect."
+                        action={<Button to="/internships">Browse internships</Button>}
+                    />
+                </Card>
+            </PageContainer>
+        );
+    }
+
+    if (state.error) {
+        return (
+            <PageContainer>
+                <BackLink />
+                <Alert title="We couldn't load this internship">{state.error}</Alert>
+            </PageContainer>
+        );
+    }
+
+    const internship = state.internship;
+    const days = daysUntil(internship.deadline);
+    const closed = internship.open === false || (days !== null && days < 0);
+    const urgent = closed || (days !== null && days <= 3);
+    const mode = workModeLabel(internship.workMode);
+    const pay = formatStipend(internship.stipend);
+    const skills = internship.requiredSkills ?? [];
+    const applicants = internship.applicantCount ?? 0;
+    const companyId = user?.role === 'COMPANY' ? (user.companyId ?? user.id) : null;
+    const isOwner = companyId && String(companyId) === String(internship.companyId);
+    const existing = application.id === id ? application.value : null;
+    const checkingApplication = isStudent && application.id !== id;
+
+    const openApply = () => {
+        setApplyError('');
+        setModalOpen(true);
+    };
+
+    const submitApplication = async () => {
+        setSubmitting(true);
+        setApplyError('');
         try {
-            await applyForInternship(user.studentNumber, id);
-            setHasApplied(true);
-            setFeedback({
-                type: 'success',
-                text: 'Application submitted successfully! The employer can now review your student profile.'
-            });
+            const created = await applyForInternship(user.id, internship.internshipId, coverLetter.trim());
+            setApplication({ id, value: created ?? { status: 'PENDING' } });
+            setState((s) => ({ ...s, internship: { ...s.internship, applicantCount: (s.internship.applicantCount ?? 0) + 1 } }));
+            setModalOpen(false);
+            setCoverLetter('');
+            toast('Application submitted', 'success');
         } catch (err) {
-            setFeedback({
-                type: 'error',
-                text: typeof err === 'string' ? err : 'Failed to submit application. You may have already applied.'
-            });
+            setApplyError(errorMessage(err, 'Could not submit your application.'));
         } finally {
-            setApplying(false);
+            setSubmitting(false);
         }
     };
 
-    const handleCopyLink = () => {
-        navigator.clipboard.writeText(window.location.href);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
+    const details = [
+        { icon: Wallet, label: 'Stipend', value: pay ?? 'Not specified' },
+        { icon: Clock, label: 'Duration', value: internship.durationMonths ? `${internship.durationMonths} month${internship.durationMonths === 1 ? '' : 's'}` : 'Not specified' },
+        { icon: CalendarDays, label: 'Start date', value: internship.startDate ? formatDate(internship.startDate) : 'Flexible' },
+        { icon: UserCheck, label: 'Positions', value: internship.positions ?? 'Not specified' },
+        { icon: CalendarClock, label: 'Apply by', value: internship.deadline ? formatDate(internship.deadline) : 'No deadline' },
+        { icon: Briefcase, label: 'Work mode', value: mode ?? 'Not specified' },
+        { icon: Users, label: 'Applicants', value: applicants },
+    ];
 
-    if (loading) {
-        return (
-            <div className="min-h-[calc(100vh-5rem)] bg-app-bg flex items-center justify-center">
-                <div className="text-center space-y-3">
-                    <Loader2 className="w-9 h-9 animate-spin mx-auto text-brand-accent" />
-                    <p className="text-xs text-text-muted">Loading internship details...</p>
+    let action;
+    if (!user) {
+        action = closed
+            ? <Button className="w-full" disabled icon={Lock}>Applications closed</Button>
+            : <Button className="w-full" size="lg" to="/login" state={{ from: location }}>Sign in to apply</Button>;
+    } else if (isStudent) {
+        if (checkingApplication) {
+            action = <Skeleton className="h-12 w-full rounded-lg" />;
+        } else if (existing) {
+            action = (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
+                            <CheckCircle2 className="w-4 h-4" /> Applied
+                        </span>
+                        <StatusBadge status={existing.status} />
+                    </div>
+                    <Button variant="secondary" className="w-full" to="/applications">View my applications</Button>
                 </div>
-            </div>
-        );
+            );
+        } else if (closed) {
+            action = <Button className="w-full" disabled icon={Lock}>Applications closed</Button>;
+        } else {
+            action = <Button className="w-full" size="lg" onClick={openApply}>Apply now</Button>;
+        }
+    } else if (isOwner) {
+        action = <Button className="w-full" variant="secondary" icon={Users} to={`/company/applicants?internship=${internship.internshipId}`}>View applicants</Button>;
+    } else if (closed) {
+        action = <Button className="w-full" disabled icon={Lock}>Applications closed</Button>;
     }
-
-    if (error || !internship) {
-        return (
-            <div className="min-h-[calc(100vh-5rem)] bg-app-bg p-6 flex items-center justify-center">
-                <div className="bg-card-bg border border-ui-border rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-sm">
-                    <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-                    <h2 className="font-heading text-lg font-bold text-text-main">Opportunity Not Available</h2>
-                    <p className="text-xs text-text-muted">{error || 'This listing does not exist.'}</p>
-                    <Link
-                        to="/internships"
-                        className="inline-flex items-center space-x-2 px-4 py-2 bg-brand-primary text-white text-xs font-semibold rounded-xl"
-                    >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Return to Internships</span>
-                    </Link>
-                </div>
-            </div>
-        );
-    }
-
-    const isExpired = internship.deadline && new Date(internship.deadline) < new Date();
-    const companyName = company?.name || 'Verified Industry Partner';
-    const companyInitial = companyName.charAt(0).toUpperCase();
 
     return (
-        <div className="min-h-[calc(100vh-5rem)] bg-app-bg p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <PageContainer>
+            <BackLink />
 
-                {/* Breadcrumbs & Back Navigation */}
-                <div className="flex items-center justify-between">
-                    <button
-                        onClick={() => navigate('/internships')}
-                        className="inline-flex items-center space-x-2 text-xs font-semibold text-text-muted hover:text-text-main transition-colors cursor-pointer"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        <span>Back to All Opportunities</span>
-                    </button>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+                {/* Main */}
+                <div className="space-y-6 min-w-0">
+                    <Card>
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                            <CompanyLogo name={internship.companyName || internship.title} size="lg" />
+                            <div className="min-w-0 flex-1">
+                                <h1 className="text-2xl sm:text-[28px] font-bold leading-tight">{internship.title}</h1>
+                                <p className="mt-1 text-base text-text-muted">{internship.companyName || 'Company'}</p>
+                                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-text-muted">
+                                    {internship.location && <span className="inline-flex items-center gap-1.5"><MapPin className="w-4 h-4 text-text-subtle" />{internship.location}</span>}
+                                    {mode && <Badge tone="info">{mode}</Badge>}
+                                    {internship.fieldOfStudy && <span className="inline-flex items-center gap-1.5"><Briefcase className="w-4 h-4 text-text-subtle" />{internship.fieldOfStudy}</span>}
+                                    <span className={cx('inline-flex items-center gap-1.5', urgent && 'text-rose-600 font-medium')}>
+                                        <CalendarClock className={cx('w-4 h-4', urgent ? 'text-rose-500' : 'text-text-subtle')} />
+                                        {closed ? 'Closed' : deadlineLabel(internship.deadline)}
+                                    </span>
+                                    {internship.createdAt && <span>Posted {timeAgo(internship.createdAt)}</span>}
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
 
-                    <button
-                        onClick={handleCopyLink}
-                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-card-bg hover:bg-slate-50 border border-ui-border rounded-xl text-xs font-semibold text-text-muted hover:text-text-main transition-all cursor-pointer shadow-xs"
-                    >
-                        {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copied ? 'Link Copied!' : 'Share Opportunity'}</span>
-                    </button>
-                </div>
-
-                {/* Feedback Banner */}
-                {feedback && (
-                    <div className={`flex items-center space-x-2 p-4 rounded-2xl text-xs font-medium border shadow-xs ${
-                        feedback.type === 'success'
-                            ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                            : 'bg-rose-50 text-rose-900 border-rose-200'
-                    }`}>
-                        {feedback.type === 'success' ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <Card>
+                        <h2 className="text-lg font-semibold mb-3">About the internship</h2>
+                        {internship.description ? (
+                            <p className="text-[15px] leading-relaxed text-text-main whitespace-pre-line">{internship.description}</p>
                         ) : (
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <p className="text-sm text-text-muted">No description provided.</p>
                         )}
-                        <span>{feedback.text}</span>
-                    </div>
-                )}
 
-                {/* Hero Header Card */}
-                <div className="bg-card-bg border border-ui-border rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
-                    <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
-                        <div className="flex items-start space-x-4">
-                            {/* Company Avatar Badge */}
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-linear-to-tr from-brand-primary to-brand-accent flex items-center justify-center text-white font-extrabold text-xl shadow-md shrink-0">
-                                {companyInitial}
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-mono text-[10px] bg-brand-primary/10 border border-brand-accent/20 text-brand-accent px-2.5 py-0.5 rounded-full font-semibold">
-                                        WIL INTERNSHIP
-                                    </span>
-                                    {isExpired ? (
-                                        <span className="font-mono text-[10px] bg-rose-50 border border-rose-200 text-rose-600 px-2.5 py-0.5 rounded-full font-semibold">
-                                            APPLICATIONS CLOSED
-                                        </span>
-                                    ) : (
-                                        <span className="font-mono text-[10px] bg-emerald-50 border border-emerald-200 text-brand-mint px-2.5 py-0.5 rounded-full font-semibold">
-                                            ACCEPTING CANDIDATES
-                                        </span>
-                                    )}
-                                </div>
-
-                                <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-text-main leading-tight">
-                                    {internship.title}
-                                </h1>
-
-                                <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-text-muted pt-1">
-                                    <div className="flex items-center space-x-1.5">
-                                        <Building2 className="w-4 h-4 text-brand-accent" />
-                                        <span className="font-semibold text-text-main">{companyName}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1.5">
-                                        <MapPin className="w-4 h-4 text-text-subtle" />
-                                        <span>{internship.location}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1.5 font-mono">
-                                        <Calendar className="w-4 h-4 text-amber-500" />
-                                        <span>Deadline: {internship.deadline ? new Date(internship.deadline).toLocaleDateString() : 'Rolling'}</span>
-                                    </div>
+                        {skills.length > 0 && (
+                            <div className="mt-6 pt-6 border-t border-ui-border">
+                                <h3 className="text-base font-semibold mb-3">Required skills</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {skills.map((s) => <Badge key={s} tone="neutral" className="text-sm px-2.5 py-1">{s}</Badge>)}
                                 </div>
                             </div>
-                        </div>
+                        )}
+                    </Card>
 
-                        {/* Top Direct Action for Desktop */}
-                        <div className="hidden sm:block shrink-0">
-                            {hasApplied ? (
-                                <div className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center space-x-2">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                    <span>Application Submitted</span>
-                                </div>
-                            ) : isExpired ? (
-                                <div className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-app-bg text-text-subtle border border-ui-border">
-                                    Deadline Expired
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={handleApply}
-                                    disabled={applying}
-                                    className="px-6 py-3 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold rounded-xl shadow-md transition-all hover:scale-[1.02] cursor-pointer flex items-center space-x-2 disabled:opacity-75"
-                                >
-                                    {applying ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            <span>Submitting Profile...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span>Apply with Student Profile</span>
-                                            <Briefcase className="w-3.5 h-3.5" />
-                                        </>
-                                    )}
-                                </button>
-                            )}
+                    <Card>
+                        <h2 className="text-lg font-semibold mb-4">About the company</h2>
+                        <div className="flex items-center gap-4">
+                            <CompanyLogo name={internship.companyName || internship.title} />
+                            <div className="min-w-0">
+                                <p className="font-semibold">{internship.companyName || 'Company'}</p>
+                                <p className="text-sm text-text-muted inline-flex items-center gap-1.5">
+                                    <Building2 className="w-4 h-4 text-text-subtle" />
+                                    {internship.companyIndustry || 'Industry not specified'}
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                        {internship.companyName && (
+                            <Link
+                                to={`/internships?q=${encodeURIComponent(internship.companyName)}`}
+                                className="mt-4 inline-flex text-sm font-semibold text-primary-700 hover:text-primary-800"
+                            >
+                                More internships from {internship.companyName}
+                            </Link>
+                        )}
+                    </Card>
                 </div>
 
-                {/* Two-Column Handshake Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Side card */}
+                <aside className="lg:sticky lg:top-20">
+                    <Card>
+                        <p className="text-sm text-text-muted">Monthly stipend</p>
+                        <p className="text-2xl font-bold mt-0.5">{pay ?? 'Not specified'}</p>
 
-                    {/* Left Column (8 cols): Job Description & WIL Info */}
-                    <div className="lg:col-span-8 space-y-6">
+                        <dl className="mt-5 divide-y divide-ui-border border-y border-ui-border">
+                            {details.map(({ icon: Icon, label, value }) => (
+                                <div key={label} className="flex items-center justify-between gap-4 py-2.5 text-sm">
+                                    <dt className="inline-flex items-center gap-2 text-text-muted"><Icon className="w-4 h-4 text-text-subtle" />{label}</dt>
+                                    <dd className="font-medium text-text-main text-right">{value}</dd>
+                                </div>
+                            ))}
+                        </dl>
 
-                        {/* Position Description */}
-                        <div className="bg-card-bg border border-ui-border rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
-                            <h2 className="font-heading text-lg font-bold text-text-main">
-                                Role Overview & Responsibilities
-                            </h2>
-                            <div className="text-xs sm:text-sm text-text-muted leading-relaxed whitespace-pre-line space-y-3">
-                                {internship.description}
-                            </div>
-                        </div>
-
-                        {/* CPUT WIL Academic Requirements Notice */}
-                        <div className="bg-card-bg border border-ui-border rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
-                            <div className="flex items-center space-x-2 text-brand-primary">
-                                <GraduationCap className="w-5 h-5 text-brand-accent" />
-                                <h3 className="font-heading text-base font-bold text-text-main">
-                                    CPUT WIL Credit Information
-                                </h3>
-                            </div>
-                            <p className="text-xs text-text-muted leading-relaxed">
-                                This opportunity qualifies for Work-Integrated Learning (WIL) academic credit for Diploma and Advanced Diploma students within the Faculty of Informatics and Design. Successful placement will be recorded against your student PRT/PRP progress.
+                        {action && <div className="mt-5">{action}</div>}
+                        {!user && !closed && (
+                            <p className="mt-3 text-xs text-text-muted text-center">
+                                New here? <Link to="/signup" className="font-semibold text-primary-700 hover:text-primary-800">Create a student account</Link>
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                <div className="p-3 bg-app-bg border border-ui-border rounded-xl text-xs space-y-1">
-                                    <span className="font-bold text-text-main block">Eligible Cohorts</span>
-                                    <span className="text-text-muted text-[11px]">Applications Development (ADP372S / PRT362S / PRP372S)</span>
-                                </div>
-                                <div className="p-3 bg-app-bg border border-ui-border rounded-xl text-xs space-y-1">
-                                    <span className="font-bold text-text-main block">Verification Status</span>
-                                    <span className="text-brand-mint text-[11px] font-semibold flex items-center space-x-1">
-                                        <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                                        <span>Industry Partner Verified</span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    {/* Right Column (4 cols): Sticky Action & Employer Profile Card */}
-                    <div className="lg:col-span-4 space-y-6">
-
-                        {/* Sticky Action Card */}
-                        <div className="bg-card-bg border border-ui-border rounded-3xl p-6 shadow-sm space-y-5 sticky top-24">
-                            <h3 className="font-heading text-sm font-bold text-text-main border-b border-ui-border pb-3">
-                                Application Summary
-                            </h3>
-
-                            <div className="space-y-3 text-xs">
-                                <div className="flex justify-between items-center text-text-muted">
-                                    <span>Listing Reference:</span>
-                                    <span className="font-mono text-[11px] text-text-main font-semibold">
-                                        {internship.internshipId}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center text-text-muted">
-                                    <span>Location:</span>
-                                    <span className="text-text-main font-semibold">{internship.location}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-text-muted">
-                                    <span>Application Deadline:</span>
-                                    <span className="text-text-main font-semibold font-mono">
-                                        {internship.deadline ? new Date(internship.deadline).toLocaleDateString() : 'Open until filled'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Button */}
-                            <div className="pt-2">
-                                {hasApplied ? (
-                                    <div className="w-full py-3 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 text-center flex items-center justify-center space-x-2">
-                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                        <span>Application Submitted</span>
-                                    </div>
-                                ) : isExpired ? (
-                                    <div className="w-full py-3 rounded-xl text-xs font-semibold bg-app-bg text-text-subtle border border-ui-border text-center">
-                                        Listing Closed
-                                    </div>
-                                ) : (
-                                    <button
-                                        onClick={handleApply}
-                                        disabled={applying}
-                                        className="w-full py-3 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold rounded-xl shadow-md transition-all hover:scale-[1.01] cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-75"
-                                    >
-                                        {applying ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                <span>Submitting Application...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span>Apply for Position</span>
-                                                <Briefcase className="w-3.5 h-3.5" />
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Employer Card Mini */}
-                            {company && (
-                                <div className="pt-4 border-t border-ui-border space-y-3">
-                                    <span className="font-mono text-[10px] text-text-muted uppercase font-bold tracking-wider">
-                                        About the Employer
-                                    </span>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-9 h-9 rounded-xl bg-brand-primary/10 text-brand-accent flex items-center justify-center font-bold text-xs">
-                                            {companyInitial}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-xs text-text-main">{company.name}</h4>
-                                            <p className="text-[11px] text-text-muted">{company.industry}</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-[11px] text-text-muted leading-tight font-mono">
-                                        Contact: {company.contactEmail}
-                                    </p>
-                                </div>
-                            )}
-
-                            {/* Trust Badge */}
-                            <div className="p-3 bg-app-bg rounded-xl border border-ui-border text-[11px] text-text-muted flex items-start space-x-2">
-                                <ShieldCheck className="w-4 h-4 text-brand-mint shrink-0 mt-0.5" />
-                                <span>All applications submitted through CareerConnect are directly forwarded to verified corporate hiring managers.</span>
-                            </div>
-                        </div>
-
-                    </div>
-
-                </div>
-
+                        )}
+                    </Card>
+                </aside>
             </div>
-        </div>
+
+            <Modal
+                open={modalOpen}
+                onClose={() => !submitting && setModalOpen(false)}
+                title={`Apply for ${internship.title}`}
+                description={internship.companyName}
+                footer={(
+                    <>
+                        <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={submitting}>Cancel</Button>
+                        <Button onClick={submitApplication} loading={submitting}>Submit application</Button>
+                    </>
+                )}
+            >
+                <div className="space-y-4">
+                    {applyError && <Alert>{applyError}</Alert>}
+                    <p className="text-sm text-text-muted">
+                        Your profile, skills and CV link will be shared with the employer. Adding a short cover letter helps you stand out.
+                    </p>
+                    <Field
+                        label="Cover letter (optional)"
+                        htmlFor="cover-letter"
+                        hint={`${coverLetter.length} / ${COVER_LETTER_MAX} characters`}
+                    >
+                        <Textarea
+                            id="cover-letter"
+                            rows={8}
+                            maxLength={COVER_LETTER_MAX}
+                            value={coverLetter}
+                            onChange={(e) => setCoverLetter(e.target.value)}
+                            placeholder="Explain why you're interested in this role and what you would bring to the team."
+                        />
+                    </Field>
+                </div>
+            </Modal>
+        </PageContainer>
+    );
+}
+
+function BackLink() {
+    return (
+        <Link to="/internships" className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted hover:text-text-main mb-5">
+            <ArrowLeft className="w-4 h-4" /> Back to internships
+        </Link>
+    );
+}
+
+function DetailsSkeleton() {
+    return (
+        <PageContainer>
+            <Skeleton className="h-5 w-40 mb-5" />
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+                <div className="space-y-6">
+                    <Card>
+                        <div className="flex gap-4">
+                            <Skeleton className="w-16 h-16 rounded-lg" />
+                            <div className="flex-1 space-y-3">
+                                <Skeleton className="h-7 w-2/3" />
+                                <Skeleton className="h-4 w-1/3" />
+                                <Skeleton className="h-4 w-1/2" />
+                            </div>
+                        </div>
+                    </Card>
+                    <Card className="space-y-3">
+                        <Skeleton className="h-5 w-48" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
+                    </Card>
+                </div>
+                <Card className="space-y-3">
+                    <Skeleton className="h-8 w-40" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                </Card>
+            </div>
+        </PageContainer>
     );
 }

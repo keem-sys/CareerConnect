@@ -1,10 +1,11 @@
 import apiClient from './apiClient';
 
-export const applyForInternship = async (studentNumber, internshipId) => {
+export const applyForInternship = async (studentNumber, internshipId, coverLetter = '') => {
     try {
         const response = await apiClient.post('/application/create', {
             studentNumber,
-            internshipId
+            internshipId,
+            coverLetter
         });
         return response.data;
     } catch (error) {
@@ -13,8 +14,8 @@ export const applyForInternship = async (studentNumber, internshipId) => {
     }
 };
 
-export const applyToInternship = async ({ studentNumber, internshipId }) => {
-    return applyForInternship(studentNumber, internshipId);
+export const applyToInternship = async ({ studentNumber, internshipId, coverLetter }) => {
+    return applyForInternship(studentNumber, internshipId, coverLetter);
 };
 
 export const getStudentApplications = async (studentNumber) => {
@@ -87,9 +88,20 @@ export const getApplicationsByStatus = async (status) => {
 
 export const withdrawApplication = async (applicationId) => {
     try {
-        await apiClient.delete(`/application/delete/${applicationId}`);
+        const response = await apiClient.put(`/application/withdraw/${applicationId}`);
+        return response.data;
     } catch (error) {
         console.error("Error withdrawing application:", error);
         throw error;
     }
+};
+
+/** Applications for one internship (company owner or admin). */
+export const getInternshipApplications = async (internshipId) => {
+    const response = await apiClient.get(`/application/internship/${internshipId}`);
+    return response.data;
+};
+
+export const deleteApplication = async (applicationId) => {
+    await apiClient.delete(`/application/delete/${applicationId}`);
 };

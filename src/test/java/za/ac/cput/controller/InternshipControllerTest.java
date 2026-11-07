@@ -10,6 +10,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 import za.ac.cput.domain.Internship;
+import za.ac.cput.repository.CompanyRepository;
+import za.ac.cput.repository.InternshipRepository;
 import za.ac.cput.service.IInternshipService;
 
 import java.time.LocalDateTime;
@@ -32,11 +34,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 public class InternshipControllerTest {
 
+    @MockitoBean
+    private za.ac.cput.service.JwtService jwtService;
+
+    @MockitoBean
+    private za.ac.cput.security.CustomUserDetailsService customUserDetailsService;
+
 @Autowired
 private MockMvc mockMvc;
 
 @MockitoBean
 private IInternshipService internshipService;
+
+@MockitoBean
+private InternshipRepository internshipRepository;
+
+@MockitoBean
+private CompanyRepository companyRepository;
 
 @Autowired
 private ObjectMapper objectMapper;
@@ -62,7 +76,7 @@ void create_Success() throws Exception {
     mockMvc.perform(post("/api/internship/create")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(internship)))
-            .andExpect(status().isOk());
+            .andExpect(status().isCreated());
 
     verify(internshipService, times(1))
             .create(any(Internship.class));
@@ -83,7 +97,8 @@ void read_Success() throws Exception {
 
 @Test
 void update_Success() throws Exception {
-    when(internshipService.update(any(Internship.class)))
+    when(internshipService.read(anyString())).thenReturn(internship);
+        when(internshipService.update(any(Internship.class)))
             .thenReturn(internship);
 
     mockMvc.perform(put("/api/internship/update")
@@ -144,6 +159,30 @@ void getByTitle_Success() throws Exception {
 
     verify(internshipService, times(1))
             .getInternshipsByTitle(anyString());
+}
+
+@Test
+void create_ReturnsBadRequestWhenInvalid() throws Exception {
+    when(internshipService.create(any(Internship.class))).thenReturn(null);
+
+    mockMvc.perform(post("/api/internship/create")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(internship)))
+            .andExpect(status().isBadRequest());
+}
+
+@Test
+void search_PassesFiltersToService() throws Exception {
+    when(internshipService.search(any())).thenReturn(List.of());
+
+    mockMvc.perform(get("/api/internship/search")
+                    .param("q", "java")
+                    .param("workMode", "HYBRID")
+                    .param("paidOnly", "true"))
+            .andExpect(status().isOk());
+
+    verify(internshipService, times(1)).search(argThat(c ->
+            "java".equals(c.q()) && c.workMode() == za.ac.cput.domain.WorkMode.HYBRID && c.paidOnly()));
 }
 
 }
